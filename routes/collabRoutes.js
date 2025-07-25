@@ -459,12 +459,14 @@ router.post('/:id/request-match', requireAuth(), async (req, res) => {
   try {
     const { description, youtubeLink } = req.body;
     const collab = await Collab.findById(req.params.id);
+    console.log('[request-match] collab:', collab);
     if (!collab) return res.status(404).json({ error: 'Collab không tồn tại' });
     if (collab.partner_waiting_for_confirm.length >= 10) {
       return res.status(400).json({ error: 'Danh sách yêu cầu đã đầy, bạn khám phá các phiên collab khác bên dưới nhé!' });
     }
     // Không cho gửi trùng user
     const userId = req.auth?.userId || req.auth?.user?.id;
+    console.log('[request-match] userId:', userId);
     if (collab.partner_waiting_for_confirm.some(w => w.user.toString() === userId)) {
       return res.status(400).json({ error: 'Bạn đã gửi yêu cầu rồi, vui lòng chờ chủ collab xác nhận!' });
     }
@@ -480,7 +482,8 @@ router.post('/:id/request-match', requireAuth(), async (req, res) => {
     await collab.save();
     res.json({ message: 'Gửi yêu cầu thành công!' });
   } catch (error) {
-    res.status(500).json({ error: 'Lỗi khi gửi yêu cầu match' });
+    console.error('[request-match] ERROR:', error);
+    res.status(500).json({ error: 'Lỗi khi gửi yêu cầu match', details: error.message });
   }
 });
 
