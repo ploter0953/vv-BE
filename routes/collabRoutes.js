@@ -467,15 +467,20 @@ router.post('/:id/request-match', requireAuth(), async (req, res) => {
     // Không cho gửi trùng user
     const userId = req.auth?.userId || req.auth?.user?.id;
     console.log('[request-match] userId:', userId);
-    if (collab.partner_waiting_for_confirm.some(w => w.user.toString() === userId)) {
+    let user = await User.findOne({ clerkId: userId });
+    if (!user && mongoose.Types.ObjectId.isValid(userId)) {
+      user = await User.findById(userId);
+    }
+    if (!user) return res.status(404).json({ error: 'User không tồn tại' });
+    if (collab.partner_waiting_for_confirm.some(w => w.user.toString() === user._id.toString())) {
       return res.status(400).json({ error: 'Bạn đã gửi yêu cầu rồi, vui lòng chờ chủ collab xác nhận!' });
     }
     // Không cho gửi nếu đã là partner chính thức
-    if ([collab.partner_1, collab.partner_2, collab.partner_3].some(p => p && p.toString() === userId)) {
+    if ([collab.partner_1, collab.partner_2, collab.partner_3].some(p => p && p.toString() === user._id.toString())) {
       return res.status(400).json({ error: 'Bạn đã là partner của collab này!' });
     }
     collab.partner_waiting_for_confirm.push({
-      user: userId,
+      user: user._id,
       description,
       youtubeLink
     });
