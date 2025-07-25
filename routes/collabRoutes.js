@@ -224,7 +224,8 @@ router.get('/:id', async (req, res) => {
       .populate('creator', 'username avatar')
       .populate('partner_1', 'username avatar')
       .populate('partner_2', 'username avatar')
-      .populate('partner_3', 'username avatar');
+      .populate('partner_3', 'username avatar')
+      .populate('partner_waiting_for_confirm.user', 'username avatar');
     
     if (!collab) {
       return res.status(404).json({ error: 'Collab không tồn tại' });
