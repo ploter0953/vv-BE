@@ -498,7 +498,12 @@ router.get('/:id/waiting-list', requireAuth(), async (req, res) => {
     const collab = await Collab.findById(req.params.id).populate('partner_waiting_for_confirm.user', 'username avatar');
     if (!collab) return res.status(404).json({ error: 'Collab không tồn tại' });
     const userId = req.auth?.userId || req.auth?.user?.id;
-    if (collab.creator.toString() !== userId) {
+    let user = await User.findOne({ clerkId: userId });
+    if (!user && mongoose.Types.ObjectId.isValid(userId)) {
+      user = await User.findById(userId);
+    }
+    if (!user) return res.status(404).json({ error: 'User không tồn tại' });
+    if (collab.creator.toString() !== user._id.toString()) {
       return res.status(403).json({ error: 'Chỉ chủ collab mới xem được danh sách này' });
     }
     res.json({ waitingList: collab.partner_waiting_for_confirm });
