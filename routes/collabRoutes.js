@@ -300,14 +300,7 @@ router.post('/', requireAuth(), createCollabLimiter, async (req, res) => {
       });
     }
 
-    // Check scheduledStartTime không quá 12 tiếng so với thời điểm tạo collab
-    const now = Date.now();
-    const scheduledStart = streamStatus.scheduledStartTime ? new Date(streamStatus.scheduledStartTime).getTime() : null;
-    if (!scheduledStart || scheduledStart - now > 12 * 60 * 60 * 1000) {
-      return res.status(400).json({
-        error: 'Thời gian bắt đầu stream phải trong vòng 12 tiếng kể từ thời điểm tạo collab.'
-      });
-    }
+
     
     // Get user
     const userId = req.auth?.userId || req.auth?.user?.id;
