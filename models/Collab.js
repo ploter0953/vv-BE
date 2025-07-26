@@ -80,6 +80,9 @@ const collabSchema = new mongoose.Schema({
   endedAt: { type: Date },
   lastStatusCheck: { type: Date, default: Date.now },
   
+  // Thời gian còn lại đến khi stream bắt đầu (tính từ stream của chủ phòng)
+  time_remaining: { type: Number, default: null }, // milliseconds
+  
   // Tổng quan khi ended
   totalViews: { type: Number, default: 0 },
   totalLikes: { type: Number, default: 0 },

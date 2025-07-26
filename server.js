@@ -2079,6 +2079,14 @@ const updateCollabStatuses = async () => {
                     scheduledStartTime: streamStatus.scheduledStartTime || null
                   };
                   
+                  // Cập nhật time_remaining nếu đây là stream của creator (stream_info_1)
+                  if (partner.field === 'stream_info_1' && streamStatus.scheduledStartTime) {
+                    const now = new Date();
+                    const scheduledStart = new Date(streamStatus.scheduledStartTime);
+                    const time_remaining = scheduledStart.getTime() - now.getTime();
+                    updateData.time_remaining = time_remaining > 0 ? time_remaining : null;
+                  }
+                  
                   if (streamStatus.isValid && streamStatus.isLive) {
                     hasLiveStream = true;
                   } else if (streamStatus.isValid && streamStatus.isWaitingRoom) {
