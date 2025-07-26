@@ -1988,31 +1988,54 @@ const updateCollabStatuses = async () => {
     console.log('=== Updating collab statuses ===');
     
     const now = new Date();
-    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
-    const oneMinuteAgo = new Date(Date.now() - 1 * 60 * 1000);
     
-    // Get collabs based on their status and last check time
-    const openCollabs = await Collab.find({
-      status: { $in: ['open', 'setting_up'] },
-      lastStatusCheck: { $lt: tenMinutesAgo }
-    }).limit(10);
-    const inProgressCollabs = await Collab.find({
-      status: 'in_progress',
-      lastStatusCheck: { $lt: oneMinuteAgo }
-    }).limit(10);
-    const allCollabs = [...openCollabs, ...inProgressCollabs];
+    // Helper function to calculate check interval based on time remaining
+    const getCheckInterval = (scheduledStartTime) => {
+      if (!scheduledStartTime) return 10 * 60 * 1000; // Default 10 minutes
+      
+      const startTime = new Date(scheduledStartTime);
+      const timeRemaining = startTime - now;
+      
+      if (timeRemaining <= 0) return 5 * 60 * 1000; // Stream already started/ended, check every 5 minutes
+      
+      const hoursRemaining = timeRemaining / (1000 * 60 * 60);
+      
+      if (hoursRemaining > 24) {
+        return 2 * 60 * 60 * 1000; // > 24 hours: check every 2 hours
+      } else if (hoursRemaining >= 12) {
+        return 60 * 60 * 1000; // 12-24 hours: check every 1 hour
+      } else if (hoursRemaining >= 1) {
+        return 10 * 60 * 1000; // 1-12 hours: check every 10 minutes
+      } else {
+        return 5 * 60 * 1000; // < 1 hour: check every 5 minutes
+      }
+    };
     
-    console.log(`Found ${allCollabs.length} collabs to update (${openCollabs.length} open, ${inProgressCollabs.length} in_progress)`);
+    // Get all collabs that need updating based on dynamic intervals
+    const allCollabs = await Collab.find({
+      status: { $in: ['open', 'setting_up', 'in_progress'] }
+    }).limit(20);
     
-    if (allCollabs.length === 0) {
+    // Filter collabs based on their check interval
+    const collabsToUpdate = allCollabs.filter(collab => {
+      const scheduledStartTime = collab.stream_info_1?.scheduledStartTime;
+      const checkInterval = getCheckInterval(scheduledStartTime);
+      const lastCheck = collab.lastStatusCheck || new Date(0);
+      const timeSinceLastCheck = now - lastCheck;
+      
+      return timeSinceLastCheck >= checkInterval;
+    });
+    console.log(`Found ${collabsToUpdate.length} collabs to update out of ${allCollabs.length} total collabs`);
+    
+    if (collabsToUpdate.length === 0) {
       console.log('No collabs need updating');
       return;
     }
     
     // Process collabs in batches to avoid rate limiting
     const batchSize = 3;
-    for (let i = 0; i < allCollabs.length; i += batchSize) {
-      const batch = allCollabs.slice(i, i + batchSize);
+    for (let i = 0; i < collabsToUpdate.length; i += batchSize) {
+      const batch = collabsToUpdate.slice(i, i + batchSize);
       
       await Promise.allSettled(batch.map(async (collab) => {
         try {
@@ -2035,10 +2058,16 @@ const updateCollabStatuses = async () => {
               try {
                 const videoId = youtubeService.extractVideoId(partner.link);
                 if (videoId) {
-                  // Use different cache timeouts based on collab status
+                  // Use dynamic cache timeout based on time remaining for open collabs
                   let cacheTimeout = 5 * 60 * 1000; // default 5 min
-                  if (collab.status === 'in_progress') cacheTimeout = 1 * 60 * 1000;
-                  if (collab.status === 'open' || collab.status === 'setting_up') cacheTimeout = 10 * 60 * 1000;
+                  if (collab.status === 'in_progress') {
+                    cacheTimeout = 1 * 60 * 1000; // 1 min for in_progress
+                  } else if (collab.status === 'open' || collab.status === 'setting_up') {
+                    // Use dynamic interval based on scheduledStartTime
+                    const scheduledStartTime = collab.stream_info_1?.scheduledStartTime;
+                    cacheTimeout = getCheckInterval(scheduledStartTime);
+                  }
+                  
                   const streamStatus = await youtubeService.checkStreamStatus(videoId, cacheTimeout);
                   
                   // Update this partner's stream info
@@ -2046,7 +2075,8 @@ const updateCollabStatuses = async () => {
                     isLive: streamStatus.isLive,
                     viewCount: streamStatus.viewCount || 0,
                     title: streamStatus.title || '',
-                    thumbnail: streamStatus.thumbnail || ''
+                    thumbnail: streamStatus.thumbnail || '',
+                    scheduledStartTime: streamStatus.scheduledStartTime || null
                   };
                   
                   if (streamStatus.isValid && streamStatus.isLive) {
@@ -2116,7 +2146,7 @@ const updateCollabStatuses = async () => {
       }));
       
       // Wait between batches to avoid rate limiting
-      if (i + batchSize < allCollabs.length) {
+      if (i + batchSize < collabsToUpdate.length) {
         await new Promise(resolve => setTimeout(resolve, 2000)); // 2 seconds delay
       }
     }
@@ -2152,5 +2182,5 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`API available at http://localhost:${PORT}/api`);
   console.log(`Server accessible from other machines on the network`);
   console.log(`CORS Enabled with security restrictions`);
-  console.log(`Collab status update task started (every 30 seconds - open: 5min, in_progress: 1min)`);
+  console.log(`Collab status update task started (every 30 seconds - dynamic intervals based on time remaining)`);
 }); 

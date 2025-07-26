@@ -32,6 +32,29 @@ function getNextPartnerSlot(collab) {
   return null; // No slots available
 }
 
+// Helper function to calculate check interval based on time remaining
+function getCheckInterval(scheduledStartTime) {
+  if (!scheduledStartTime) return 10 * 60 * 1000; // Default 10 minutes
+  
+  const now = new Date();
+  const startTime = new Date(scheduledStartTime);
+  const timeRemaining = startTime - now;
+  
+  if (timeRemaining <= 0) return 5 * 60 * 1000; // Stream already started/ended, check every 5 minutes
+  
+  const hoursRemaining = timeRemaining / (1000 * 60 * 60);
+  
+  if (hoursRemaining > 24) {
+    return 2 * 60 * 60 * 1000; // > 24 hours: check every 2 hours
+  } else if (hoursRemaining >= 12) {
+    return 60 * 60 * 1000; // 12-24 hours: check every 1 hour
+  } else if (hoursRemaining >= 1) {
+    return 10 * 60 * 1000; // 1-12 hours: check every 10 minutes
+  } else {
+    return 5 * 60 * 1000; // < 1 hour: check every 5 minutes
+  }
+}
+
 // Helper function to update collab status based on conditions
 async function updateCollabStatus(collabId) {
   try {
@@ -56,14 +79,18 @@ async function updateCollabStatus(collabId) {
     let totalLikes = 0;
     let totalComments = 0;
 
-    // Nếu đang open, chỉ check link của creator
+    // Nếu đang open, chỉ check link của creator với thời gian check động
     if (collab.status === 'open') {
       const link = collab.youtube_link_1;
       if (link) {
         try {
           const videoId = youtubeService.extractVideoId(link);
           if (videoId) {
-            const streamStatus = await youtubeService.checkStreamStatus(videoId, 10 * 60 * 1000);
+            // Lấy scheduledStartTime từ stream_info_1 nếu có
+            const scheduledStartTime = collab.stream_info_1?.scheduledStartTime;
+            const checkInterval = getCheckInterval(scheduledStartTime);
+            
+            const streamStatus = await youtubeService.checkStreamStatus(videoId, checkInterval);
             if (streamStatus.isValid && streamStatus.isLive) {
               hasLiveStream = true;
               allStreamsEnded = false;
@@ -77,7 +104,7 @@ async function updateCollabStatus(collabId) {
         }
       }
     } else {
-      // Các trạng thái khác: check tất cả link
+      // Các trạng thái khác: check tất cả link với thời gian check cố định
       for (const partner of partners) {
         if (partner.link) {
           try {
