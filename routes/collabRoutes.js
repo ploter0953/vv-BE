@@ -678,7 +678,8 @@ router.put('/:id/stream-info', youtubeApiLimiter, async (req, res) => {
                 isLive: streamInfo.isLive,
                 viewCount: streamInfo.viewCount || 0,
                 title: streamInfo.title || '',
-                thumbnail: streamInfo.thumbnail || ''
+                thumbnail: streamInfo.thumbnail || '',
+                scheduledStartTime: streamInfo.scheduledStartTime || null
               };
             }
           }
