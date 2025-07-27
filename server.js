@@ -2070,6 +2070,18 @@ const updateCollabStatuses = async () => {
                   
                   const streamStatus = await youtubeService.checkStreamStatus(videoId, cacheTimeout);
                   
+                  // Nếu là creator và collab đang open, kiểm tra hợp lệ
+                  if (collab.status === 'open' && partner.field === 'stream_info_1') {
+                    if (!streamStatus.isValid || (!streamStatus.isWaitingRoom && !streamStatus.isLive)) {
+                      await Collab.findByIdAndUpdate(collab._id, {
+                        status: 'cancelled',
+                        endedAt: new Date(),
+                        lastStatusCheck: new Date()
+                      });
+                      return;
+                    }
+                  }
+                  
                   // Update this partner's stream info
                   updateData[partner.field] = {
                     isLive: streamStatus.isLive,

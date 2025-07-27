@@ -91,12 +91,31 @@ async function updateCollabStatus(collabId) {
             const checkInterval = getCheckInterval(scheduledStartTime);
             
             const streamStatus = await youtubeService.checkStreamStatus(videoId, checkInterval);
+            // Nếu link không hợp lệ hoặc không phải phòng chờ/đang live thì huỷ collab
+            if (!streamStatus.isValid || (!streamStatus.isWaitingRoom && !streamStatus.isLive)) {
+              await Collab.findByIdAndUpdate(collabId, {
+                status: 'cancelled',
+                endedAt: new Date(),
+                lastStatusCheck: new Date()
+              });
+              return;
+            }
             if (streamStatus.isValid && streamStatus.isLive) {
               hasLiveStream = true;
               allStreamsEnded = false;
             } else if (streamStatus.isValid && streamStatus.isWaitingRoom) {
               hasWaitingRoom = true;
               allStreamsEnded = false;
+            }
+            // Cập nhật time_remaining nếu có scheduledStartTime
+            if (streamStatus.scheduledStartTime) {
+              const now = new Date();
+              const scheduledStart = new Date(streamStatus.scheduledStartTime);
+              const time_remaining = scheduledStart.getTime() - now.getTime();
+              await Collab.findByIdAndUpdate(collabId, {
+                time_remaining: time_remaining > 0 ? time_remaining : null,
+                lastStatusCheck: new Date()
+              });
             }
           }
         } catch (error) {
@@ -511,6 +530,50 @@ router.post('/:id/request-match', requireAuth(), async (req, res) => {
     if ([collab.partner_1, collab.partner_2, collab.partner_3].some(p => p && p.toString() === user._id.toString())) {
       return res.status(400).json({ error: 'Bạn đã là partner của collab này!' });
     }
+    
+    // Kiểm tra link YouTube của partner
+    if (!youtubeService.validateYouTubeUrl(youtubeLink)) {
+      return res.status(400).json({ error: 'Link YouTube không hợp lệ' });
+    }
+    
+    // Check stream status của partner
+    const partnerVideoId = youtubeService.extractVideoId(youtubeLink);
+    const partnerStreamStatus = await youtubeService.checkStreamStatus(partnerVideoId, 5 * 60 * 1000);
+    
+    if (!partnerStreamStatus.isValid) {
+      return res.status(400).json({ 
+        error: 'Link YouTube của bạn không hợp lệ hoặc stream đã bắt đầu' 
+      });
+    }
+    
+    if (!partnerStreamStatus.isWaitingRoom) {
+      return res.status(400).json({ 
+        error: 'Link YouTube của bạn phải là phòng chờ (waiting room)' 
+      });
+    }
+    
+    // Kiểm tra thời gian diễn ra stream có trùng khớp với chủ phòng không
+    const creatorScheduledTime = collab.stream_info_1?.scheduledStartTime;
+    const partnerScheduledTime = partnerStreamStatus.scheduledStartTime;
+    
+    if (!creatorScheduledTime || !partnerScheduledTime) {
+      return res.status(400).json({ 
+        error: 'Không thể xác định thời gian diễn ra stream. Vui lòng thử lại sau.' 
+      });
+    }
+    
+    // So sánh thời gian (cho phép sai lệch 5 phút)
+    const creatorTime = new Date(creatorScheduledTime).getTime();
+    const partnerTime = new Date(partnerScheduledTime).getTime();
+    const timeDiff = Math.abs(creatorTime - partnerTime);
+    const maxTimeDiff = 5 * 60 * 1000; // 5 phút
+    
+    if (timeDiff > maxTimeDiff) {
+      return res.status(400).json({ 
+        error: 'Thời gian diễn ra stream của bạn không trùng khớp với thời gian của chủ phòng. Vui lòng kiểm tra lại.' 
+      });
+    }
+    
     collab.partner_waiting_for_confirm.push({
       user: user._id,
       description,
@@ -605,6 +668,7 @@ router.post('/:id/reject-waiting/:waitingId', requireAuth(), async (req, res) =>
     if (waitingIndex === -1) return res.status(404).json({ error: 'Yêu cầu không tồn tại' });
     collab.partner_waiting_for_confirm.splice(waitingIndex, 1);
     await collab.save();
+    await updateCollabStatus(collab._id);
     res.json({ message: 'Đã từ chối yêu cầu!' });
   } catch (error) {
     res.status(500).json({ error: 'Lỗi khi từ chối yêu cầu' });
