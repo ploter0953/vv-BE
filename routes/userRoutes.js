@@ -298,10 +298,6 @@ router.post('/:id/stream-schedule', requireAuth(), async (req, res) => {
     
     // Validate user authentication
     const userId = req.auth?.userId || req.auth?.user?.id;
-    if (userId !== id && !id.startsWith('user_')) {
-      return res.status(403).json({ message: 'Unauthorized' });
-    }
-    
     let user;
     if (id.startsWith('user_')) {
       user = await User.findOne({ clerkId: id });
@@ -313,6 +309,11 @@ router.post('/:id/stream-schedule', requireAuth(), async (req, res) => {
     
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // So sánh cả ObjectId và ClerkId
+    if (user.clerkId !== userId && String(user._id) !== userId) {
+      return res.status(403).json({ message: 'Unauthorized' });
     }
     
     // Validate YouTube URL
@@ -393,10 +394,6 @@ router.delete('/:id/stream-schedule/:dayOfWeek', requireAuth(), async (req, res)
     
     // Validate user authentication
     const userId = req.auth?.userId || req.auth?.user?.id;
-    if (userId !== id && !id.startsWith('user_')) {
-      return res.status(403).json({ message: 'Unauthorized' });
-    }
-    
     let user;
     if (id.startsWith('user_')) {
       user = await User.findOne({ clerkId: id });
@@ -405,9 +402,12 @@ router.delete('/:id/stream-schedule/:dayOfWeek', requireAuth(), async (req, res)
     } else {
       return res.status(400).json({ message: 'Invalid user id' });
     }
-    
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
+    }
+    // So sánh cả ObjectId và ClerkId
+    if (user.clerkId !== userId && String(user._id) !== userId) {
+      return res.status(403).json({ message: 'Unauthorized' });
     }
     
     // Remove slot for the specified day
