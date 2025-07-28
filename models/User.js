@@ -19,7 +19,48 @@ const userSchema = new mongoose.Schema({
   youtube: String,
   tiktok: String,
   lastSeen: { type: Date, default: Date.now }, // Track online status
-  isOnline: { type: Boolean, default: false } // Real-time online status
+  isOnline: { type: Boolean, default: false }, // Real-time online status
+  
+  // Stream Schedule
+  streamSchedule: [{
+    dayOfWeek: { 
+      type: String, 
+      enum: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'],
+      required: true 
+    },
+    timeSlot: { 
+      type: String, 
+      required: true,
+      validate: {
+        validator: function(v) {
+          // Validate time format HH:mm
+          return /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(v);
+        },
+        message: 'Time slot must be in HH:mm format (e.g., 20:00)'
+      }
+    },
+    title: { type: String, default: '' },
+    streamLink: { 
+      type: String, 
+      default: '',
+      validate: {
+        validator: function(v) {
+          if (!v) return true; // Allow empty
+          // Basic YouTube URL validation
+          return /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+/.test(v);
+        },
+        message: 'Stream link must be a valid YouTube URL'
+      }
+    },
+    isActive: { type: Boolean, default: true },
+    status: { 
+      type: String, 
+      enum: ['upcoming', 'live', 'ended', 'none'],
+      default: 'none'
+    },
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now }
+  }]
 });
 
 module.exports = mongoose.model('User', userSchema); 

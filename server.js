@@ -11,6 +11,7 @@ const userRoutes = require('./routes/userRoutes');
 const commissionRoutes = require('./routes/commissionRoutes');
 const orderRoutes = require('./routes/orderRoutes');
 const collabRoutes = require('./routes/collabRoutes');
+const youtubeService = require('./services/youtubeService');
 const User = require('./models/User');
 const Commission = require('./models/Commission');
 const Order = require('./models/Order');
@@ -2196,6 +2197,86 @@ const updateCollabStatuses = async () => {
 // Start background task
 setInterval(updateCollabStatuses, 30000); // Every 30 seconds - checks collab status and updates based on timing rules
 
+// ==================== STREAM SCHEDULE CRON JOBS ====================
+
+// Reset all stream schedules every Monday at 00:00 (Vietnam time)
+const resetStreamSchedules = async () => {
+  try {
+    console.log('Running stream schedule reset task...');
+    
+    // Get current time in Vietnam timezone (UTC+7)
+    const now = new Date();
+    const vietnamTime = new Date(now.getTime() + (7 * 60 * 60 * 1000));
+    
+    // Check if it's Monday 00:00
+    if (vietnamTime.getDay() === 1 && vietnamTime.getHours() === 0 && vietnamTime.getMinutes() < 5) {
+      console.log('Resetting all stream schedules...');
+      
+      // Clear all stream schedules
+      const result = await User.updateMany(
+        { streamSchedule: { $exists: true, $ne: [] } },
+        { $set: { streamSchedule: [] } }
+      );
+      
+      console.log(`Reset ${result.modifiedCount} users' stream schedules`);
+    }
+  } catch (error) {
+    console.error('Error in stream schedule reset task:', error);
+  }
+};
+
+// Update stream status every 5 minutes
+const updateStreamStatuses = async () => {
+  try {
+    console.log('Running stream status update task...');
+    
+    // Get all users with stream schedules
+    const users = await User.find({ 
+      streamSchedule: { $exists: true, $ne: [] } 
+    });
+    
+    for (const user of users) {
+      for (const slot of user.streamSchedule) {
+        if (slot.streamLink && slot.isActive) {
+          try {
+            // Extract video ID
+            const videoId = youtubeService.extractVideoId(slot.streamLink);
+            if (!videoId) continue;
+            
+            // Check stream status
+            const streamInfo = await youtubeService.checkStreamStatus(videoId);
+            
+            let newStatus = 'none';
+            if (streamInfo.isLive) {
+              newStatus = 'live';
+            } else if (streamInfo.isWaitingRoom) {
+              newStatus = 'upcoming';
+            } else if (streamInfo.isEnded) {
+              newStatus = 'ended';
+            }
+            
+            // Update status if changed
+            if (slot.status !== newStatus) {
+              slot.status = newStatus;
+              slot.updatedAt = new Date();
+              await user.save();
+              console.log(`Updated stream status for ${user.username} - ${slot.dayOfWeek}: ${newStatus}`);
+            }
+          } catch (error) {
+            console.error(`Error checking stream status for ${user.username} - ${slot.dayOfWeek}:`, error.message);
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error in stream status update task:', error);
+  }
+};
+
+// Start stream schedule cron jobs
+setInterval(resetStreamSchedules, 60000); // Check every minute for Monday reset
+setInterval(updateStreamStatuses, 5 * 60 * 1000); // Update status every 5 minutes
+
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on port ${PORT}`);
@@ -2203,4 +2284,6 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server accessible from other machines on the network`);
   console.log(`CORS Enabled with security restrictions`);
   console.log(`Collab status update task started (every 30 seconds - dynamic intervals based on time remaining)`);
+  console.log(`Stream schedule reset task started (every Monday 00:00 Vietnam time)`);
+  console.log(`Stream status update task started (every 5 minutes)`);
 }); 
