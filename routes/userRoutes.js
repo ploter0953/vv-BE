@@ -295,9 +295,10 @@ router.post('/:id/stream-schedule', requireAuth(), async (req, res) => {
   try {
     const { id } = req.params;
     const { streamLink } = req.body;
+    const userId = req.auth?.userId || req.auth?.user?.id;
+    console.log('[STREAM SCHEDULE] Add/Update request:', { id, userId, streamLink, time: new Date().toISOString() });
     
     // Validate user authentication
-    const userId = req.auth?.userId || req.auth?.user?.id;
     let user;
     if (id.startsWith('user_')) {
       user = await User.findOne({ clerkId: id });
