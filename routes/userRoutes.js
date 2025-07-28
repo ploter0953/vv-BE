@@ -341,6 +341,23 @@ router.post('/:id/stream-schedule', requireAuth(), async (req, res) => {
     // Convert to Vietnam timezone (UTC+7)
     const scheduledTime = new Date(streamInfo.scheduledStartTime);
     const vietnamTime = new Date(scheduledTime.getTime() + (7 * 60 * 60 * 1000));
+
+    // Kiểm tra nếu stream thuộc tuần sau
+    const now = new Date();
+    const nowVN = new Date(now.getTime() + (7 * 60 * 60 * 1000));
+    // Lấy thứ (0=CN, 1=Thứ 2,...) và số tuần trong năm
+    const getWeek = (d) => {
+      d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+      d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay()||7));
+      const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+      const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1)/7);
+      return weekNo;
+    };
+    const weekNow = getWeek(nowVN);
+    const weekStream = getWeek(vietnamTime);
+    if (weekStream > weekNow) {
+      return res.status(400).json({ error: 'next_week', message: 'Buổi stream này có lịch vào tuần sau, bạn vui lòng đợi tuần sau để thêm lịch' });
+    }
     
     // Get day of week (0 = Sunday, 1 = Monday, etc.)
     const dayOfWeek = vietnamTime.getDay();
