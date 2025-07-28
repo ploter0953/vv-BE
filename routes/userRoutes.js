@@ -79,6 +79,7 @@ router.get('/:id', async (req, res) => {
   const mongoose = require('mongoose');
   
   try {
+    console.log('[USER PROFILE] Query:', { id, time: new Date().toISOString() });
     if (id.startsWith('user_')) {
       // Clerk ID
       user = await User.findOne({ clerkId: id });
@@ -92,6 +93,7 @@ router.get('/:id', async (req, res) => {
     if (!user) return res.status(404).json({ message: 'User not found' });
     res.json({ user });
   } catch (err) {
+    console.error('[USER PROFILE] Error:', err);
     res.status(500).json({ message: err.message });
   }
 });
