@@ -212,4 +212,7 @@ class YouTubeService {
   }
 }
 
-module.exports = new YouTubeService();
+const instance = new YouTubeService();
+instance.isValidYouTubeUrl = instance.validateYouTubeUrl.bind(instance);
+
+module.exports = instance;
