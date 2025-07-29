@@ -8,6 +8,35 @@ const { createCollabLimiter, matchCollabLimiter, youtubeApiLimiter } = require('
 
 const router = express.Router();
 
+// Helper function to update stream_info_1 for existing collabs
+async function updateStreamInfoForCollab(collabId) {
+  try {
+    const collab = await Collab.findById(collabId);
+    if (!collab || !collab.youtube_link_1) return false;
+    
+    const videoId = youtubeService.extractVideoId(collab.youtube_link_1);
+    if (!videoId) return false;
+    
+    const streamStatus = await youtubeService.checkStreamStatus(videoId, 5 * 60 * 1000);
+    if (!streamStatus.isValid) return false;
+    
+    await Collab.findByIdAndUpdate(collabId, {
+      stream_info_1: {
+        isLive: streamStatus.isLive,
+        viewCount: streamStatus.viewCount || 0,
+        title: streamStatus.title || '',
+        thumbnail: streamStatus.thumbnail || '',
+        scheduledStartTime: streamStatus.scheduledStartTime || null
+      }
+    });
+    
+    return true;
+  } catch (error) {
+    console.error('Error updating stream_info_1 for collab:', error);
+    return false;
+  }
+}
+
 // Helper function to get current partner count
 function getCurrentPartnerCount(collab) {
   let count = 0;
@@ -100,6 +129,19 @@ async function updateCollabStatus(collabId) {
               });
               return;
             }
+            
+            // Cập nhật stream_info_1 với thông tin mới nhất
+            await Collab.findByIdAndUpdate(collabId, {
+              stream_info_1: {
+                isLive: streamStatus.isLive,
+                viewCount: streamStatus.viewCount || 0,
+                title: streamStatus.title || '',
+                thumbnail: streamStatus.thumbnail || '',
+                scheduledStartTime: streamStatus.scheduledStartTime || null
+              },
+              lastStatusCheck: new Date()
+            });
+            
             if (streamStatus.isValid && streamStatus.isLive) {
               hasLiveStream = true;
               allStreamsEnded = false;
@@ -369,6 +411,14 @@ router.post('/', requireAuth(), createCollabLimiter, async (req, res) => {
       maxPartners,
       youtube_link_1: youtubeLink,
       time_remaining: time_remaining,
+      // Lưu thông tin stream của creator
+      stream_info_1: {
+        isLive: streamStatus.isLive,
+        viewCount: streamStatus.viewCount || 0,
+        title: streamStatus.title || '',
+        thumbnail: streamStatus.thumbnail || '',
+        scheduledStartTime: streamStatus.scheduledStartTime || null
+      },
       // Không lưu creator vào partner_1 để tránh nhầm lẫn
       partner_1_description: description
     });
@@ -557,12 +607,24 @@ router.post('/:id/request-match', requireAuth(), async (req, res) => {
     }
     
     // Kiểm tra thời gian diễn ra stream có trùng khớp với chủ phòng không
-    const creatorScheduledTime = collab.stream_info_1?.scheduledStartTime;
+    let creatorScheduledTime = collab.stream_info_1?.scheduledStartTime;
     const partnerScheduledTime = partnerStreamStatus.scheduledStartTime;
     
     console.log('[request-match] creatorScheduledTime:', creatorScheduledTime);
     console.log('[request-match] partnerScheduledTime:', partnerScheduledTime);
     console.log('[request-match] collab.stream_info_1:', collab.stream_info_1);
+    
+    // Nếu creatorScheduledTime không có, thử update stream_info_1
+    if (!creatorScheduledTime && collab.youtube_link_1) {
+      console.log('[request-match] Attempting to update stream_info_1 for collab');
+      const updated = await updateStreamInfoForCollab(collab._id);
+      if (updated) {
+        // Reload collab data
+        const updatedCollab = await Collab.findById(collab._id);
+        creatorScheduledTime = updatedCollab.stream_info_1?.scheduledStartTime;
+        console.log('[request-match] Updated creatorScheduledTime:', creatorScheduledTime);
+      }
+    }
     
     if (!creatorScheduledTime || !partnerScheduledTime) {
       console.log('[request-match] ERROR: Missing scheduled time - creator:', !!creatorScheduledTime, 'partner:', !!partnerScheduledTime);
