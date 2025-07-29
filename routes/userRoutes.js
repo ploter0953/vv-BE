@@ -319,6 +319,11 @@ router.post('/:id/stream-schedule', requireAuth(), async (req, res) => {
       return res.status(403).json({ message: 'Unauthorized' });
     }
     
+    // Kiểm tra badge vtuber
+    if (!user.badges || !user.badges.includes('vtuber')) {
+      return res.status(403).json({ message: 'Chỉ user có badge vtuber mới có thể thêm lịch stream' });
+    }
+    
     // Validate YouTube URL
     if (!streamLink || !youtubeService.isValidYouTubeUrl(streamLink)) {
       return res.status(400).json({ message: 'Invalid YouTube URL' });
@@ -345,21 +350,35 @@ router.post('/:id/stream-schedule', requireAuth(), async (req, res) => {
     const scheduledTime = new Date(streamInfo.scheduledStartTime);
     const vietnamTime = new Date(scheduledTime.getTime() + (7 * 60 * 60 * 1000));
 
-    // Kiểm tra nếu stream thuộc tuần sau
+    // Kiểm tra nếu stream vượt quá tuần hiện tại
     const now = new Date();
     const nowVN = new Date(now.getTime() + (7 * 60 * 60 * 1000));
-    // Lấy thứ (0=CN, 1=Thứ 2,...) và số tuần trong năm
-    const getWeek = (d) => {
-      d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-      d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay()||7));
-      const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
-      const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1)/7);
-      return weekNo;
+    
+    // Tính tuần hiện tại (bắt đầu từ thứ 2)
+    const getCurrentWeekStart = (date) => {
+      const d = new Date(date);
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Thứ 2 là ngày đầu tuần
+      return new Date(d.setDate(diff));
     };
-    const weekNow = getWeek(nowVN);
-    const weekStream = getWeek(vietnamTime);
-    if (weekStream > weekNow) {
-      return res.status(400).json({ error: 'next_week', message: 'Buổi stream này có lịch vào tuần sau, bạn vui lòng đợi tuần sau để thêm lịch' });
+    
+    const getCurrentWeekEnd = (date) => {
+      const weekStart = getCurrentWeekStart(date);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 6); // Thêm 6 ngày để có chủ nhật
+      weekEnd.setHours(23, 59, 59, 999); // Cuối ngày chủ nhật
+      return weekEnd;
+    };
+    
+    const currentWeekStart = getCurrentWeekStart(nowVN);
+    const currentWeekEnd = getCurrentWeekEnd(nowVN);
+    
+    // Kiểm tra nếu stream không thuộc tuần hiện tại
+    if (vietnamTime < currentWeekStart || vietnamTime > currentWeekEnd) {
+      return res.status(400).json({ 
+        error: 'out_of_week', 
+        message: 'Thời gian stream bạn vừa nhập vượt quá tuần hiện tại' 
+      });
     }
     
     // Get day of week (0 = Sunday, 1 = Monday, etc.)
@@ -378,9 +397,7 @@ router.post('/:id/stream-schedule', requireAuth(), async (req, res) => {
       timeSlot: timeSlot,
       title: streamInfo.title || '',
       streamLink: streamLink,
-      isActive: true,
-      status: 'none', // No longer updating status dynamically
-      updatedAt: new Date()
+      isActive: true
     };
     
     if (existingSlotIndex >= 0) {
