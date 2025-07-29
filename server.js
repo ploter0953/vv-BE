@@ -2225,57 +2225,10 @@ const resetStreamSchedules = async () => {
   }
 };
 
-// Update stream status every 5 minutes
-const updateStreamStatuses = async () => {
-  try {
-    console.log('Running stream status update task...');
-    
-    // Get all users with stream schedules
-    const users = await User.find({ 
-      streamSchedule: { $exists: true, $ne: [] } 
-    });
-    
-    for (const user of users) {
-      for (const slot of user.streamSchedule) {
-        if (slot.streamLink && slot.isActive) {
-          try {
-            // Extract video ID
-            const videoId = youtubeService.extractVideoId(slot.streamLink);
-            if (!videoId) continue;
-            
-            // Check stream status
-            const streamInfo = await youtubeService.checkStreamStatus(videoId);
-            
-            let newStatus = 'none';
-            if (streamInfo.isLive) {
-              newStatus = 'live';
-            } else if (streamInfo.isWaitingRoom) {
-              newStatus = 'upcoming';
-            } else if (streamInfo.isEnded) {
-              newStatus = 'ended';
-            }
-            
-            // Update status if changed
-            if (slot.status !== newStatus) {
-              slot.status = newStatus;
-              slot.updatedAt = new Date();
-              await user.save();
-              console.log(`Updated stream status for ${user.username} - ${slot.dayOfWeek}: ${newStatus}`);
-            }
-          } catch (error) {
-            console.error(`Error checking stream status for ${user.username} - ${slot.dayOfWeek}:`, error.message);
-          }
-        }
-      }
-    }
-  } catch (error) {
-    console.error('Error in stream status update task:', error);
-  }
-};
+// Stream status update logic removed - no longer needed
 
 // Start stream schedule cron jobs
 setInterval(resetStreamSchedules, 60000); // Check every minute for Monday reset
-setInterval(updateStreamStatuses, 5 * 60 * 1000); // Update status every 5 minutes
 
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
@@ -2285,5 +2238,4 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`CORS Enabled with security restrictions`);
   console.log(`Collab status update task started (every 30 seconds - dynamic intervals based on time remaining)`);
   console.log(`Stream schedule reset task started (every Monday 00:00 Vietnam time)`);
-  console.log(`Stream status update task started (every 5 minutes)`);
 }); 

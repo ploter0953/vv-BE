@@ -53,13 +53,7 @@ const userSchema = new mongoose.Schema({
       }
     },
     isActive: { type: Boolean, default: true },
-    status: { 
-      type: String, 
-      enum: ['upcoming', 'live', 'ended', 'none'],
-      default: 'none'
-    },
-    createdAt: { type: Date, default: Date.now },
-    updatedAt: { type: Date, default: Date.now }
+    createdAt: { type: Date, default: Date.now }
   }]
 });
 

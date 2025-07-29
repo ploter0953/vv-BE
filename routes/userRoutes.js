@@ -379,7 +379,7 @@ router.post('/:id/stream-schedule', requireAuth(), async (req, res) => {
       title: streamInfo.title || '',
       streamLink: streamLink,
       isActive: true,
-      status: streamInfo.isLive ? 'live' : streamInfo.isWaitingRoom ? 'upcoming' : 'none',
+      status: 'none', // No longer updating status dynamically
       updatedAt: new Date()
     };
     
@@ -444,37 +444,6 @@ router.delete('/:id/stream-schedule/:dayOfWeek', requireAuth(), async (req, res)
   }
 });
 
-// Update stream status (called by cron job)
-router.put('/:id/stream-schedule/status', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { dayOfWeek, status } = req.body;
-    
-    let user;
-    if (id.startsWith('user_')) {
-      user = await User.findOne({ clerkId: id });
-    } else if (mongoose.Types.ObjectId.isValid(id)) {
-      user = await User.findById(id);
-    } else {
-      return res.status(400).json({ message: 'Invalid user id' });
-    }
-    
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-    
-    const slotIndex = user.streamSchedule.findIndex(slot => slot.dayOfWeek === dayOfWeek);
-    if (slotIndex >= 0) {
-      user.streamSchedule[slotIndex].status = status;
-      user.streamSchedule[slotIndex].updatedAt = new Date();
-      await user.save();
-    }
-    
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Error updating stream status:', error);
-    res.status(500).json({ message: 'Error updating stream status' });
-  }
-});
+// Stream status update endpoint removed - no longer needed
 
 module.exports = router; 
