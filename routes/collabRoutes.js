@@ -43,6 +43,27 @@ async function updateStreamInfoForCollab(collabId) {
       }
     };
     
+    // Also update partner stream info if exists
+    if (collab.youtube_link_1_partner) {
+      const partnerVideoId = youtubeService.extractVideoId(collab.youtube_link_1_partner);
+      if (partnerVideoId) {
+        try {
+          const partnerStreamStatus = await youtubeService.checkStreamStatus(partnerVideoId, 5 * 60 * 1000);
+          if (partnerStreamStatus.isValid) {
+            updateData.stream_info_1_partner = {
+              isLive: partnerStreamStatus.isLive,
+              viewCount: partnerStreamStatus.viewCount || 0,
+              title: partnerStreamStatus.title || '',
+              thumbnail: partnerStreamStatus.thumbnail || '',
+              scheduledStartTime: partnerStreamStatus.scheduledStartTime || null
+            };
+          }
+        } catch (error) {
+          console.error('[updateStreamInfoForCollab] Error updating partner stream:', error);
+        }
+      }
+    }
+    
     console.log('[updateStreamInfoForCollab] Updating with data:', updateData);
     await Collab.findByIdAndUpdate(collabId, updateData);
     console.log('[updateStreamInfoForCollab] Update successful');
@@ -546,6 +567,17 @@ router.post('/:id/match', requireAuth(), matchCollabLimiter, async (req, res) =>
     // Use different field names for partner_1
     if (nextSlot === 1) {
       updateData['youtube_link_1_partner'] = youtubeLink;
+      // Also update stream_info_1_partner with initial data
+      const partnerStreamStatus = await youtubeService.checkStreamStatus(videoId, 5 * 60 * 1000);
+      if (partnerStreamStatus.isValid) {
+        updateData['stream_info_1_partner'] = {
+          isLive: partnerStreamStatus.isLive,
+          viewCount: partnerStreamStatus.viewCount || 0,
+          title: partnerStreamStatus.title || '',
+          thumbnail: partnerStreamStatus.thumbnail || '',
+          scheduledStartTime: partnerStreamStatus.scheduledStartTime || null
+        };
+      }
     } else {
       updateData[`youtube_link_${nextSlot}`] = youtubeLink;
     }
@@ -936,6 +968,7 @@ router.put('/:id/stream-info', youtubeApiLimiter, async (req, res) => {
     // Check each partner's YouTube link and update their stream info
     const partners = [
       { link: collab.youtube_link_1, field: 'stream_info_1' },
+      { link: collab.youtube_link_1_partner, field: 'stream_info_1_partner' },
       { link: collab.youtube_link_2, field: 'stream_info_2' },
       { link: collab.youtube_link_3, field: 'stream_info_3' }
     ];

@@ -2230,6 +2230,44 @@ const resetStreamSchedules = async () => {
 // Start stream schedule cron jobs
 setInterval(resetStreamSchedules, 60000); // Check every minute for Monday reset
 
+// ==================== USER ONLINE STATUS CRON JOBS ====================
+
+// Mark users as offline after 5 minutes of inactivity
+const updateUserOnlineStatus = async () => {
+  try {
+    console.log('Running user online status update task...');
+    
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    
+    // Find users who are marked as online but haven't been seen in 5 minutes
+    const inactiveUsers = await User.find({
+      isOnline: true,
+      lastSeen: { $lt: fiveMinutesAgo }
+    });
+    
+    if (inactiveUsers.length > 0) {
+      console.log(`Marking ${inactiveUsers.length} users as offline due to inactivity`);
+      
+      // Mark them as offline
+      await User.updateMany(
+        {
+          isOnline: true,
+          lastSeen: { $lt: fiveMinutesAgo }
+        },
+        {
+          isOnline: false,
+          lastSeen: new Date()
+        }
+      );
+    }
+  } catch (error) {
+    console.error('Error in user online status update task:', error);
+  }
+};
+
+// Start user online status cron job
+setInterval(updateUserOnlineStatus, 60000); // Check every minute
+
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on port ${PORT}`);
@@ -2238,4 +2276,5 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`CORS Enabled with security restrictions`);
   console.log(`Collab status update task started (every 30 seconds - dynamic intervals based on time remaining)`);
   console.log(`Stream schedule reset task started (every Monday 00:00 Vietnam time)`);
+  console.log(`User online status update task started (every minute - marks users offline after 5 minutes inactivity)`);
 }); 
