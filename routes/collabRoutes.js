@@ -511,6 +511,8 @@ router.post('/:id/request-match', requireAuth(), async (req, res) => {
     const { description, youtubeLink } = req.body;
     const collab = await Collab.findById(req.params.id);
     console.log('[request-match] collab:', collab);
+    console.log('[request-match] request body:', { description, youtubeLink });
+    
     if (!collab) return res.status(404).json({ error: 'Collab không tồn tại' });
     if (collab.partner_waiting_for_confirm.length >= 10) {
       return res.status(400).json({ error: 'Danh sách yêu cầu đã đầy, bạn khám phá các phiên collab khác bên dưới nhé!' });
@@ -538,7 +540,9 @@ router.post('/:id/request-match', requireAuth(), async (req, res) => {
     
     // Check stream status của partner
     const partnerVideoId = youtubeService.extractVideoId(youtubeLink);
+    console.log('[request-match] partnerVideoId:', partnerVideoId);
     const partnerStreamStatus = await youtubeService.checkStreamStatus(partnerVideoId, 5 * 60 * 1000);
+    console.log('[request-match] partnerStreamStatus:', partnerStreamStatus);
     
     if (!partnerStreamStatus.isValid) {
       return res.status(400).json({ 
@@ -556,7 +560,12 @@ router.post('/:id/request-match', requireAuth(), async (req, res) => {
     const creatorScheduledTime = collab.stream_info_1?.scheduledStartTime;
     const partnerScheduledTime = partnerStreamStatus.scheduledStartTime;
     
+    console.log('[request-match] creatorScheduledTime:', creatorScheduledTime);
+    console.log('[request-match] partnerScheduledTime:', partnerScheduledTime);
+    console.log('[request-match] collab.stream_info_1:', collab.stream_info_1);
+    
     if (!creatorScheduledTime || !partnerScheduledTime) {
+      console.log('[request-match] ERROR: Missing scheduled time - creator:', !!creatorScheduledTime, 'partner:', !!partnerScheduledTime);
       return res.status(400).json({ 
         error: 'Không thể xác định thời gian diễn ra stream. Vui lòng thử lại sau.' 
       });
@@ -567,6 +576,13 @@ router.post('/:id/request-match', requireAuth(), async (req, res) => {
     const partnerTime = new Date(partnerScheduledTime).getTime();
     const timeDiff = Math.abs(creatorTime - partnerTime);
     const maxTimeDiff = 5 * 60 * 1000; // 5 phút
+    
+    console.log('[request-match] time comparison:', {
+      creatorTime: new Date(creatorTime).toISOString(),
+      partnerTime: new Date(partnerTime).toISOString(),
+      timeDiff: timeDiff / 1000 / 60, // minutes
+      maxTimeDiff: maxTimeDiff / 1000 / 60 // minutes
+    });
     
     if (timeDiff > maxTimeDiff) {
       return res.status(400).json({ 
@@ -580,6 +596,7 @@ router.post('/:id/request-match', requireAuth(), async (req, res) => {
       youtubeLink
     });
     await collab.save();
+    console.log('[request-match] SUCCESS: Request added to waiting list');
     res.json({ message: 'Gửi yêu cầu thành công!' });
   } catch (error) {
     console.error('[request-match] ERROR:', error);
