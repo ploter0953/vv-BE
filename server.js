@@ -1798,6 +1798,7 @@ app.get('/api/feedback', requireAuth(), async (req, res) => {
   try {
     // Only admin can view all feedback
     const user = await User.findById(req.auth.userId);
+    
     if (!user || user.email !== 'huynguyen86297@gmail.com') {
       return res.status(403).json({ error: 'Không có quyền truy cập' });
     }
@@ -1838,6 +1839,8 @@ app.delete('/api/feedback/:id', requireAuth(), async (req, res) => {
     res.status(500).json({ error: 'Lỗi server' });
   }
 });
+
+
 
 // Test endpoint for User model
 app.get('/api/test/users', async (req, res) => {
