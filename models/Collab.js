@@ -22,7 +22,8 @@ const collabSchema = new mongoose.Schema({
     isLive: { type: Boolean, default: false },
     viewCount: { type: Number, default: 0 },
     title: { type: String, default: '' },
-    thumbnail: { type: String, default: '' }
+    thumbnail: { type: String, default: '' },
+    scheduledStartTime: { type: String, default: null }
   },
   
   // Partner 1 (người match đầu tiên)
@@ -33,7 +34,8 @@ const collabSchema = new mongoose.Schema({
     isLive: { type: Boolean, default: false },
     viewCount: { type: Number, default: 0 },
     title: { type: String, default: '' },
-    thumbnail: { type: String, default: '' }
+    thumbnail: { type: String, default: '' },
+    scheduledStartTime: { type: String, default: null }
   },
   
   // Partner 2 (optional)
@@ -44,7 +46,8 @@ const collabSchema = new mongoose.Schema({
     isLive: { type: Boolean, default: false },
     viewCount: { type: Number, default: 0 },
     title: { type: String, default: '' },
-    thumbnail: { type: String, default: '' }
+    thumbnail: { type: String, default: '' },
+    scheduledStartTime: { type: String, default: null }
   },
   
   // Partner 3 (optional)
@@ -55,7 +58,8 @@ const collabSchema = new mongoose.Schema({
     isLive: { type: Boolean, default: false },
     viewCount: { type: Number, default: 0 },
     title: { type: String, default: '' },
-    thumbnail: { type: String, default: '' }
+    thumbnail: { type: String, default: '' },
+    scheduledStartTime: { type: String, default: null }
   },
   
   // Danh sách chờ xác nhận partner
