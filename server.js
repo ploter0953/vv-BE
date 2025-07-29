@@ -1797,7 +1797,7 @@ app.post('/api/feedback', async (req, res) => {
 app.get('/api/feedback', requireAuth(), async (req, res) => {
   try {
     // Only admin can view all feedback
-    const user = await User.findById(req.auth.userId);
+    const user = await User.findOne({ clerkId: req.auth.userId });
     
     if (!user || user.email !== 'huynguyen86297@gmail.com') {
       return res.status(403).json({ error: 'Không có quyền truy cập' });
@@ -1820,7 +1820,7 @@ app.get('/api/feedback', requireAuth(), async (req, res) => {
 app.delete('/api/feedback/:id', requireAuth(), async (req, res) => {
   try {
     // Only admin can delete feedback
-    const user = await User.findById(req.auth.userId);
+    const user = await User.findOne({ clerkId: req.auth.userId });
     if (!user || user.email !== 'huynguyen86297@gmail.com') {
       return res.status(403).json({ error: 'Không có quyền truy cập' });
     }
