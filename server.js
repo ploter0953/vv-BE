@@ -79,7 +79,8 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-producti
 const getAllowedOrigins = () => {
   // Only allow official domain
   const allowedOrigins = [
-    'https://www.projectvtuber.com'
+    'https://www.projectvtuber.com',
+    'https://chat.projectvtuber.com'
   ];
   
   return allowedOrigins;
