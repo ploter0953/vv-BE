@@ -204,12 +204,26 @@ async function updateCollabStatus(collabId) {
       }
     } else {
       // Các trạng thái khác: check tất cả link với thời gian check cố định
-      for (const partner of partners) {
+      const updateData = {};
+      
+      for (let i = 0; i < partners.length; i++) {
+        const partner = partners[i];
         if (partner.link) {
           try {
             const videoId = youtubeService.extractVideoId(partner.link);
             if (videoId) {
               const streamStatus = await youtubeService.checkStreamStatus(videoId, 5 * 60 * 1000);
+              
+              // Cập nhật stream info cho từng partner
+              const streamInfoKey = partner.field;
+              updateData[streamInfoKey] = {
+                isLive: streamStatus.isLive,
+                viewCount: streamStatus.viewCount || 0,
+                title: streamStatus.title || '',
+                thumbnail: streamStatus.thumbnail || '',
+                scheduledStartTime: streamStatus.scheduledStartTime || null
+              };
+              
               if (streamStatus.isValid && streamStatus.isLive) {
                 hasLiveStream = true;
                 allStreamsEnded = false;
@@ -227,6 +241,12 @@ async function updateCollabStatus(collabId) {
             console.error(`Error checking stream for ${partner.field}:`, error.message);
           }
         }
+      }
+      
+      // Cập nhật stream info cho tất cả partners
+      if (Object.keys(updateData).length > 0) {
+        updateData.lastStatusCheck = new Date();
+        await Collab.findByIdAndUpdate(collabId, updateData);
       }
     }
 
