@@ -19,6 +19,15 @@ module.exports = {
     const discordId = interaction.user.id;
     const inputId = interaction.options.getString('id');
 
+    // Validate Discord ID format
+    const discordIdPattern = /^\d{17,19}$/;
+    if (!discordIdPattern.test(inputId)) {
+      return interaction.reply({
+        content: '❌ Discord ID không hợp lệ. Discord ID phải có 17-19 chữ số.',
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
     // Kiểm tra xem ID nhập vào có phải là ID của người dùng không
     if (inputId !== discordId) {
       return interaction.reply({

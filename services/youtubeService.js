@@ -3,11 +3,34 @@ const axios = require('axios');
 class YouTubeService {
   constructor() {
     this.apiKey = process.env.YOUTUBE_API_KEY;
+    if (!this.apiKey) {
+      console.error('YOUTUBE_API_KEY environment variable is required!');
+      throw new Error('YOUTUBE_API_KEY not configured');
+    }
     this.baseUrl = 'https://www.googleapis.com/youtube/v3';
     this.cache = new Map();
     this.cacheTimeout = 5 * 60 * 1000; // 5 phút cache
     this.retryAttempts = 3;
     this.retryDelay = 1000; // 1 giây
+    this.maxCacheSize = 1000; // Prevent memory leaks
+    
+    // Rate limiting
+    this.requestQueue = [];
+    this.maxRequestsPerSecond = 10; // 10 requests per second
+    this.lastRequestTime = 0;
+  }
+
+  // Rate limiting mechanism
+  async throttleRequest() {
+    const now = Date.now();
+    const timeSinceLastRequest = now - this.lastRequestTime;
+    const minInterval = 1000 / this.maxRequestsPerSecond; // 100ms between requests
+    
+    if (timeSinceLastRequest < minInterval) {
+      await new Promise(resolve => setTimeout(resolve, minInterval - timeSinceLastRequest));
+    }
+    
+    this.lastRequestTime = Date.now();
   }
 
   // Cache management
@@ -26,6 +49,17 @@ class YouTubeService {
   }
 
   setCache(key, data) {
+    // Cleanup old entries if cache is too large
+    if (this.cache.size >= this.maxCacheSize) {
+      const entries = Array.from(this.cache.entries());
+      entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+      // Remove oldest 20% of entries
+      const toRemove = Math.floor(this.maxCacheSize * 0.2);
+      for (let i = 0; i < toRemove; i++) {
+        this.cache.delete(entries[i][0]);
+      }
+    }
+    
     this.cache.set(key, {
       data,
       timestamp: Date.now()
@@ -92,13 +126,16 @@ class YouTubeService {
     }
 
     try {
+      await this.throttleRequest(); // Rate limiting
+      
       const response = await this.retryOperation(async () => {
         return await axios.get(`${this.baseUrl}/videos`, {
           params: {
             part: 'snippet,status,statistics,liveStreamingDetails',
             id: videoId,
             key: this.apiKey
-          }
+          },
+          timeout: 10000 // 10 second timeout (hardcoded)
         });
       });
 

@@ -57,6 +57,17 @@ router.get('/clerk/:clerkId', async (req, res) => {
   }
 });
 
+// Lấy user theo username (PHẢI đặt trước route /:id)
+router.get('/username/:username', async (req, res) => {
+  try {
+    const user = await User.findOne({ username: req.params.username });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.json({ user });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // Lấy commissions của user (hỗ trợ cả ObjectId và ClerkId)
 router.get('/:id/commissions', async (req, res) => {
   const { id } = req.params;
@@ -108,53 +119,7 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// Clerk sync endpoint
-router.post('/clerk-sync-test', async (req, res) => {
-  try {
-    const { clerkId, email, username, avatar } = req.body;
-    if (!clerkId || !email) {
-      return res.status(400).json({ error: 'clerkId và email là bắt buộc' });
-    }
-    
-    let user = await User.findOne({ clerkId });
-    if (user) {
-      return res.json({
-        user,
-        message: 'User đã tồn tại, trả về profile.'
-      });
-    }
-    
-    // Create new user object
-    const newUserObj = {
-      clerkId,
-      email,
-      username: username || '',
-      avatar: avatar || '',
-      banner: '',
-      role: 'user',
-      badges: ['member'],
-      bio: '',
-      description: '',
-      facebook: '',
-      website: '',
-      profile_email: '',
-      vtuber_description: '',
-      artist_description: '',
-      twitch: '',
-      youtube: '',
-      tiktok: ''
-    };
-    
-    user = await User.create(newUserObj);
-    return res.status(201).json({
-      user,
-      message: 'Tạo user mới thành công.'
-    });
-  } catch (error) {
-    console.error('Clerk sync error:', error);
-    res.status(500).json({ error: 'Lỗi server khi đồng bộ user với Clerk.' });
-  }
-});
+
 
 // Update user online status
 router.post('/online', requireAuth(), async (req, res) => {

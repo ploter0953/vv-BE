@@ -42,10 +42,10 @@ class DonationCleanupService {
       const donations = db.collection('donations');
 
       // Xóa các records cũ hơn 15 giây
-      const fifteenSecondsAgo = new Date(Date.now() - 15 * 1000);
+      const cutoffTime = new Date(Date.now() - 15 * 1000);
       
       const result = await donations.deleteMany({
-        createdAt: { $lt: fifteenSecondsAgo }
+        createdAt: { $lt: cutoffTime }
       });
 
       if (result.deletedCount > 0) {

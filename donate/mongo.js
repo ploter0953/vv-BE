@@ -161,12 +161,37 @@ async function cleanupOldDonations() {
   const { donations } = await getConnection();
   const cutoffTime = new Date(Date.now() - 15 * 1000); // 15 giây trước
   
-  const result = await donations.deleteMany({
-    createdAt: { $lt: cutoffTime }
-  });
+  try {
+    const result = await donations.deleteMany({
+      createdAt: { $lt: cutoffTime }
+    });
+    
+    if (result.deletedCount > 0) {
+      console.log(`🧹 Đã xóa ${result.deletedCount} donation records cũ`);
+    }
+  } catch (error) {
+    console.error('Error cleaning up old donations:', error);
+  }
+}
+
+// Cleanup inactive users (users with no activity for 30 days)
+async function cleanupInactiveUsers() {
+  const { users } = await getConnection();
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   
-  if (result.deletedCount > 0) {
-    console.log(`🧹 Đã xóa ${result.deletedCount} donation records cũ`);
+  try {
+    const result = await users.deleteMany({
+      lastSeen: { $lt: thirtyDaysAgo },
+      balance: 0,
+      donated: 0,
+      donate_received: 0
+    });
+    
+    if (result.deletedCount > 0) {
+      console.log(`🧹 Đã xóa ${result.deletedCount} inactive users`);
+    }
+  } catch (error) {
+    console.error('Error cleaning up inactive users:', error);
   }
 }
 
@@ -180,5 +205,6 @@ module.exports = {
   getUserDonations,
   getUserTotalDonated,
   getTopDonors,
-  cleanupOldDonations
+  cleanupOldDonations,
+  cleanupInactiveUsers
 };

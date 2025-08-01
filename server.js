@@ -170,19 +170,7 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-// Webhook endpoint - completely bypass all middleware
-app.get('/webhook/test', (req, res) => {
-  console.log('=== WEBHOOK TEST ENDPOINT HIT ===');
-  console.log('Method:', req.method);
-  console.log('Path:', req.path);
-  console.log('Headers:', req.headers);
-  console.log('Timestamp:', new Date().toISOString());
-  
-  res.json({ 
-    message: 'Webhook endpoint is working!',
-    timestamp: new Date().toISOString()
-  });
-});
+
 
 app.post('/webhook/casso', (req, res, next) => {
   console.log('=== CASSO WEBHOOK RECEIVED ===');
@@ -198,18 +186,7 @@ app.post('/webhook/casso', (req, res, next) => {
   next();
 }, require('./donate/xulinaptien'));
 
-app.get('/webhook/casso/test', (req, res) => {
-  console.log('=== CASSO WEBHOOK TEST ENDPOINT HIT ===');
-  console.log('Method:', req.method);
-  console.log('Path:', req.path);
-  console.log('Headers:', req.headers);
-  console.log('Timestamp:', new Date().toISOString());
-  
-  res.json({ 
-    message: 'Webhook endpoint is working!',
-    timestamp: new Date().toISOString()
-  });
-});
+
 
 // Apply origin validation middleware to all API routes except uploads
 app.use('/api', (req, res, next) => {
@@ -450,38 +427,7 @@ function extractPublicIdFromCloudinaryUrl(url) {
   return null;
 }
 
-// Test endpoint
-app.get('/api/test', (req, res) => {
-  res.json({ 
-    message: 'API is working!', 
-    timestamp: new Date().toISOString(),
-    version: '1.0.0'
-  });
-});
 
-// Test endpoint for commissions
-app.get('/api/test/commissions', async (req, res) => {
-  try {
-    console.log('Testing commission data...');
-    
-    // Get raw commission count
-    const count = await Commission.countDocuments();
-    console.log('Total commissions in database:', count);
-    
-    // Get a sample commission
-    const sampleCommission = await Commission.findOne().lean();
-    console.log('Sample commission:', sampleCommission);
-    
-    res.json({ 
-      message: 'Commission test successful',
-      totalCount: count,
-      sampleCommission: sampleCommission
-    });
-  } catch (error) {
-    console.error('Commission test error:', error);
-    res.status(500).json({ error: 'Commission test failed: ' + error.message });
-  }
-});
 
 // Fix usernames for existing users
 app.post('/api/users/fix-usernames', async (req, res) => {
@@ -621,10 +567,7 @@ app.get('/api/users/vote', async (req, res) => {
       return res.status(500).json({ error: 'Database connection error' });
     }
     
-    // Test basic User.find() first
-    console.log('Testing basic User.find()...');
-    const allUsers = await User.find({}).limit(1);
-    console.log('Basic User.find() result:', allUsers.length, 'users found');
+
     
     const users = await User.find(query)
       .select('username avatar bio badges vtuber_description artist_description')
@@ -1210,13 +1153,7 @@ app.post('/api/upload/images', requireAuth(), upload.array('images', 10), async 
   }
 });
 
-// Test endpoint to check upload availability  
-app.get('/api/upload/media/test', (req, res) => {
-  res.json({ 
-    message: 'Upload endpoint is accessible',
-    timestamp: new Date().toISOString()
-  });
-});
+
 
 // Simple rate limiting for uploads (in memory - for production use Redis)
 const uploadRateLimit = new Map();
@@ -1898,66 +1835,7 @@ app.delete('/api/feedback/:id', requireAuth(), async (req, res) => {
 
 
 
-// Test endpoint for User model
-app.get('/api/test/users', async (req, res) => {
-  try {
-    console.log('=== /api/test/users called ===');
-    console.log('User model exists:', !!User);
-    console.log('Mongoose connection readyState:', mongoose.connection.readyState);
-    
-    if (!mongoose.connection.readyState) {
-      return res.status(500).json({ error: 'Database not connected' });
-    }
-    
-    // Test simple count
-    const count = await User.countDocuments();
-    console.log('Total users in database:', count);
-    
-    // Test simple find
-    const users = await User.find({}).limit(3).select('username email');
-    console.log('Sample users:', users);
-    
-    res.json({
-      message: 'User model test successful',
-      totalUsers: count,
-      sampleUsers: users,
-      connectionState: mongoose.connection.readyState
-    });
-    
-  } catch (error) {
-    console.error('User model test error:', error);
-    res.status(500).json({ 
-      error: 'User model test failed', 
-      details: error.message,
-      name: error.name,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-    });
-  }
-});
 
-// Test endpoint for commissions
-app.get('/api/test/commissions', async (req, res) => {
-  try {
-    console.log('Testing commission data...');
-    
-    // Get raw commission count
-    const count = await Commission.countDocuments();
-    console.log('Total commissions in database:', count);
-    
-    // Get a sample commission
-    const sampleCommission = await Commission.findOne().lean();
-    console.log('Sample commission:', sampleCommission);
-    
-    res.json({ 
-      message: 'Commission test successful',
-      totalCount: count,
-      sampleCommission: sampleCommission
-    });
-  } catch (error) {
-    console.error('Commission test error:', error);
-    res.status(500).json({ error: 'Commission test failed: ' + error.message });
-  }
-});
 
 // Clerk sync endpoint from userRoutes.js
 // (ĐÃ CÓ TRONG ROUTER userRoutes.js, KHÔNG CẦN ĐỊNH NGHĨA LẠI Ở ĐÂY)
@@ -2029,7 +1907,7 @@ app.use((req, res, next) => {
     message: `Không tìm thấy route ${req.method} ${req.path}`,
     availableRoutes: {
       upload: 'POST /api/upload/media',
-      uploadTest: 'GET /api/upload/media/test',
+  
       commissions: 'GET /api/commissions',
       createCommission: 'POST /api/commissions'
     }

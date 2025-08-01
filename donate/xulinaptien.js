@@ -3,22 +3,44 @@ const express = require('express');
 const router = express.Router();
 const mongo = require('./mongo');  // path tới file mongo.js
 
-// Test endpoint để kiểm tra webhook
-router.get('/test', (req, res) => {
-  res.json({ 
-    message: 'Webhook endpoint is working!',
-    timestamp: new Date().toISOString()
-  });
-});
 
-// Hàm trích xuất Discord ID từ description (chuỗi số 17-20 chữ số)
+
+// Hàm trích xuất và validate Discord ID từ description
 function extractDiscordId(description) {
   const match = description.match(/\b\d{17,20}\b/);
-  return match ? match[0] : null;
+  if (!match) return null;
+  
+  const discordId = match[0];
+  
+  // Validate Discord ID format (17-19 digits)
+  if (!/^\d{17,19}$/.test(discordId)) {
+    return null;
+  }
+  
+  // Additional validation: Discord IDs are typically 17-19 digits
+  // and should not be all zeros or all ones
+  if (discordId === '0'.repeat(discordId.length) || 
+      discordId === '1'.repeat(discordId.length)) {
+    return null;
+  }
+  
+  return discordId;
 }
 
+// Rate limiting for webhook
+const rateLimit = require('express-rate-limit');
+const webhookLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10, // limit each IP to 10 requests per minute
+  message: {
+    error: 'Too many webhook requests, please try again later.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Endpoint webhook Casso
-router.post('/', async (req, res) => {
+router.post('/', webhookLimiter, async (req, res) => {
   console.log('=== PROCESSING CASSO WEBHOOK ===');
   console.log('Request body:', JSON.stringify(req.body, null, 2));
   console.log('Headers:', req.headers);
@@ -67,9 +89,16 @@ router.post('/', async (req, res) => {
         });
       }
       
+      // Validate amount range and format
       if (amount <= 0 || amount % 10000 !== 0) {
-        console.log('=== ERROR: Invalid amount ===');
+        console.log('=== ERROR: Invalid amount format ===');
         return res.status(400).json({ error: 'Số tiền phải là bội số của 10.000' });
+      }
+      
+      // Validate amount range (min: 10,000, max: 10,000,000)
+      if (amount < 10000 || amount > 10000000) {
+        console.log('=== ERROR: Amount out of range ===');
+        return res.status(400).json({ error: 'Số tiền phải từ 10,000 đến 10,000,000 VNĐ' });
       }
       
       console.log('=== DATA VALIDATION PASSED ===');
@@ -125,11 +154,24 @@ router.post('/', async (req, res) => {
     };
     console.log('Donation data:', donationData);
     
-    await mongo.saveDonation(donationData);
-    
-    await client.close();
-    console.log('=== WEBHOOK PROCESSING COMPLETED SUCCESSFULLY ===');
-    return res.status(200).json({ success: true, discordId, amount });
+    try {
+      await mongo.saveDonation(donationData);
+      
+      // Log successful donation
+      console.log('=== SUCCESSFUL DONATION VIA CASSO ===');
+      console.log('Discord ID:', discordId);
+      console.log('Amount:', amount);
+      console.log('User:', user.username);
+      console.log('Timestamp:', new Date().toISOString());
+      
+      await client.close();
+      console.log('=== WEBHOOK PROCESSING COMPLETED SUCCESSFULLY ===');
+      return res.status(200).json({ success: true, discordId, amount });
+    } catch (saveError) {
+      console.error('Error saving donation record:', saveError);
+      await client.close();
+      return res.status(500).json({ error: 'Failed to save donation record' });
+    }
       } catch (err) {
       console.log('=== WEBHOOK PROCESSING ERROR ===');
       console.error('Error details:', err);

@@ -88,14 +88,7 @@ async function deleteFromCloudinary(publicId) {
 // Use requireAuth() for all protected routes:
 // router.post('/', requireAuth(), ...)
 
-// Test endpoint
-router.get('/test', (req, res) => {
-  res.json({ 
-    message: 'Commission routes are working!',
-    timestamp: new Date().toISOString(),
-    mongodbState: mongoose.connection.readyState
-  });
-});
+
 
 // Get commission types
 router.get('/types', (req, res) => {
@@ -129,44 +122,7 @@ function getCommissionTypeIcon(typeId) {
   return iconMap[typeId] || '❓';
 }
 
-// Test endpoint to check commission data
-router.get('/test/data', async (req, res) => {
-  try {
-    console.log('Testing commission data...');
-    
-    // Get raw commission count
-    const count = await Commission.countDocuments();
-    console.log('Total commissions in database:', count);
-    
-    // Get a sample commission without populate
-    const sampleCommission = await Commission.findOne().lean();
-    console.log('Sample commission (no populate):', sampleCommission);
-    
-    // Get a sample commission with populate
-    const sampleCommissionWithUser = await Commission.findOne().populate('user').lean();
-    console.log('Sample commission (with populate):', sampleCommissionWithUser);
-    
-    // Get all users
-    const userCount = await User.countDocuments();
-    console.log('Total users in database:', userCount);
-    
-    // Get a sample user
-    const sampleUser = await User.findOne().lean();
-    console.log('Sample user:', sampleUser);
-    
-    res.json({ 
-      message: 'Commission data test successful',
-      totalCommissions: count,
-      totalUsers: userCount,
-      sampleCommission: sampleCommission,
-      sampleCommissionWithUser: sampleCommissionWithUser,
-      sampleUser: sampleUser
-    });
-  } catch (error) {
-    console.error('Commission data test error:', error);
-    res.status(500).json({ error: 'Commission data test failed: ' + error.message });
-  }
-});
+
 
 // Fix old commission data (convert string user to ObjectId)
 router.post('/fix-data', async (req, res) => {

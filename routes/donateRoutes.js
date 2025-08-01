@@ -17,6 +17,27 @@ router.post('/web', async (req, res) => {
       return res.status(400).json({ error: 'Thiếu thông tin bắt buộc' });
     }
 
+    // Validate ObjectId format
+    const { ObjectId } = require('mongodb');
+    if (!ObjectId.isValid(donorId) || !ObjectId.isValid(recipientId)) {
+      return res.status(400).json({ error: 'ID không hợp lệ' });
+    }
+
+    // Validate display name
+    if (typeof displayName !== 'string' || displayName.trim().length === 0 || displayName.length > 50) {
+      return res.status(400).json({ error: 'Tên hiển thị không hợp lệ (1-50 ký tự)' });
+    }
+
+    // Validate amount
+    if (typeof amount !== 'number' || amount < 10000 || amount % 10000 !== 0) {
+      return res.status(400).json({ error: 'Số tiền phải từ 10,000 VNĐ và là bội số của 10,000 VNĐ' });
+    }
+
+    // Validate message (optional)
+    if (message && (typeof message !== 'string' || message.length > 200)) {
+      return res.status(400).json({ error: 'Lời nhắn không hợp lệ (tối đa 200 ký tự)' });
+    }
+
     const MONGO_URI = process.env.MONGODB_URI;
     const client = new MongoClient(MONGO_URI);
     await client.connect();
@@ -25,7 +46,6 @@ router.post('/web', async (req, res) => {
     const users = db.collection('users');
     
     // Convert string IDs to ObjectId if needed
-    const { ObjectId } = require('mongodb');
     const donorObjectId = typeof donorId === 'string' ? new ObjectId(donorId) : donorId;
     const recipientObjectId = typeof recipientId === 'string' ? new ObjectId(recipientId) : recipientId;
     
@@ -72,26 +92,50 @@ router.post('/web', async (req, res) => {
       return res.status(400).json({ error: 'Số tiền phải lớn hơn 10,000 VNĐ và là bội số của 10,000 VNĐ' });
     }
     
-    // Update donor balance and donated amount
-    await users.updateOne(
-      { _id: donorObjectId },
-      { 
-        $inc: { 
-          balance: -amount,
-          donated: amount
-        } 
-      }
-    );
-    
-    // Update recipient donate_received
-    await users.updateOne(
-      { _id: recipientObjectId },
-      { 
-        $inc: { 
-          donate_received: amount
-        } 
-      }
-    );
+    // Use transaction to ensure data consistency
+    const session = client.startSession();
+    try {
+      await session.withTransaction(async () => {
+        // Check donor balance again within transaction
+        const donorInTransaction = await users.findOne({ _id: donorObjectId }, { session });
+        if (!donorInTransaction || donorInTransaction.balance < amount) {
+          throw new Error('Insufficient balance');
+        }
+
+        // Update donor balance and donated amount
+        const donorUpdateResult = await users.updateOne(
+          { _id: donorObjectId, balance: { $gte: amount } },
+          { 
+            $inc: { 
+              balance: -amount,
+              donated: amount
+            } 
+          },
+          { session }
+        );
+
+        if (donorUpdateResult.modifiedCount === 0) {
+          throw new Error('Failed to update donor balance');
+        }
+        
+        // Update recipient donate_received
+        const recipientUpdateResult = await users.updateOne(
+          { _id: recipientObjectId },
+          { 
+            $inc: { 
+              donate_received: amount
+            } 
+          },
+          { session }
+        );
+
+        if (recipientUpdateResult.modifiedCount === 0) {
+          throw new Error('Failed to update recipient');
+        }
+      });
+    } finally {
+      await session.endSession();
+    }
     
     // Save donation record
     const donations = db.collection('donations');
@@ -151,6 +195,7 @@ router.get('/latest', async (req, res) => {
       const latestDonate = latestDonation.donate[latestDonation.donate.length - 1];
       res.json({ 
         donation: {
+          userId: latestDonation.userId || latestDonation.id, // Support both schemas
           name: latestDonate.name,
           amount: latestDonate.amount,
           message: latestDonate.message,
@@ -162,6 +207,51 @@ router.get('/latest', async (req, res) => {
     }
   } catch (error) {
     console.error('Error getting latest donation:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get latest donation for specific user
+router.get('/latest/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const MONGO_URI = process.env.MONGODB_URI;
+    const client = new MongoClient(MONGO_URI);
+    await client.connect();
+    
+    const db = client.db('vtuberverse');
+    const donations = db.collection('donations');
+    
+    // Lấy donation mới nhất cho user cụ thể (createdAt trong 15 giây qua)
+    const fifteenSecondsAgo = new Date(Date.now() - 15 * 1000);
+    const latestDonation = await donations.findOne({
+      $or: [
+        { id: userId },
+        { userId: userId }
+      ],
+      createdAt: { $gte: fifteenSecondsAgo }
+    }, {
+      sort: { createdAt: -1 }
+    });
+    
+    await client.close();
+    
+    if (latestDonation && latestDonation.donate && latestDonation.donate.length > 0) {
+      const latestDonate = latestDonation.donate[latestDonation.donate.length - 1];
+      res.json({ 
+        donation: {
+          userId: userId,
+          name: latestDonate.name,
+          amount: latestDonate.amount,
+          message: latestDonate.message,
+          timestamp: latestDonate.timestamp
+        }
+      });
+    } else {
+      res.json({ donation: null });
+    }
+  } catch (error) {
+    console.error('Error getting latest donation for user:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

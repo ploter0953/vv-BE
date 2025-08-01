@@ -2,14 +2,15 @@ const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js'
 const { saveDonation } = require('../mongo');
 const { MongoClient } = require('mongodb');
 
-const LOG_CHANNEL_ID = '1279062001586278411'; // Thay bằng kênh log thực tế
+const LOG_CHANNEL_ID = process.env.DISCORD_LOG_CHANNEL_ID || '1279062001586278411';
 const MONGO_URI = process.env.MONGODB_URI;
 if (!MONGO_URI) throw new Error('MONGODB_URI env variable is required!');
 const DB_NAME = 'vtuberverse';
 const USERS_COLLECTION = 'users';
 const DONATIONS_COLLECTION = 'donations';
 
-let donateCooldown = false;
+// Per-user cooldown tracking
+const userCooldowns = new Map();
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -36,18 +37,47 @@ module.exports = {
         .setMaxLength(100)),
 
   async execute(interaction) {
-    if (donateCooldown) {
+    const discordId = interaction.user.id;
+    
+    // Check per-user cooldown
+    const lastDonateTime = userCooldowns.get(discordId);
+    const now = Date.now();
+    const cooldownTime = 20000; // 20 seconds
+    
+    if (lastDonateTime && (now - lastDonateTime) < cooldownTime) {
+      const remainingTime = Math.ceil((cooldownTime - (now - lastDonateTime)) / 1000);
       return interaction.reply({
-        content: 'Vừa có người donate gần đây, bạn đợi 20 giây rồi thử lại nhé!',
+        content: `⏰ Bạn vừa donate gần đây, vui lòng đợi ${remainingTime} giây nữa!`,
         flags: MessageFlags.Ephemeral
       });
     }
 
-    const discordId = interaction.user.id;
-    const targetUsername = interaction.options.getString('username');
-    const displayName = interaction.options.getString('display_name');
-    const amount = interaction.options.getInteger('amount');
-    const message = interaction.options.getString('message') || 'Không có';
+          const targetUsername = interaction.options.getString('username').trim();
+      const displayName = interaction.options.getString('display_name').trim();
+      const amount = interaction.options.getInteger('amount');
+      const message = (interaction.options.getString('message') || 'Không có').trim();
+
+      // Sanitize inputs
+      if (!targetUsername || targetUsername.length < 1 || targetUsername.length > 30) {
+        return interaction.reply({
+          content: '⚠️ Username không hợp lệ (1-30 ký tự)',
+          flags: MessageFlags.Ephemeral
+        });
+      }
+
+      if (!displayName || displayName.length < 1 || displayName.length > 50) {
+        return interaction.reply({
+          content: '⚠️ Tên hiển thị không hợp lệ (1-50 ký tự)',
+          flags: MessageFlags.Ephemeral
+        });
+      }
+
+      if (message.length > 200) {
+        return interaction.reply({
+          content: '⚠️ Lời nhắn quá dài (tối đa 200 ký tự)',
+          flags: MessageFlags.Ephemeral
+        });
+      }
 
     if (amount < 10000 || amount % 10000 !== 0) {
       return interaction.reply({
@@ -56,8 +86,9 @@ module.exports = {
       });
     }
 
+    let client = null;
     try {
-      const client = new MongoClient(MONGO_URI);
+      client = new MongoClient(MONGO_URI);
       await client.connect();
       const db = client.db(DB_NAME);
       const users = db.collection(USERS_COLLECTION);
@@ -106,30 +137,61 @@ module.exports = {
         });
       }
 
-      // Cập nhật balance và donated cho donor
-      await users.updateOne(
-        { _id: donor._id },
-        { 
-          $inc: { 
-            balance: -amount,
-            donated: amount
-          } 
-        }
-      );
+      // Use transaction to ensure data consistency
+      const session = client.startSession();
+      try {
+        await session.withTransaction(async () => {
+          // Check donor balance again within transaction
+          const donorInTransaction = await users.findOne({ _id: donor._id }, { session });
+          if (!donorInTransaction || donorInTransaction.balance < amount) {
+            throw new Error('Insufficient balance');
+          }
 
-      // Cập nhật donate_received cho recipient
-      await users.updateOne(
-        { _id: recipient._id },
-        { 
-          $inc: { 
-            donate_received: amount
-          } 
-        }
-      );
+          // Update donor balance and donated amount
+          const donorUpdateResult = await users.updateOne(
+            { _id: donor._id, balance: { $gte: amount } },
+            { 
+              $inc: { 
+                balance: -amount,
+                donated: amount
+              } 
+            },
+            { session }
+          );
 
-      // Cooldown 20 giây
-      donateCooldown = true;
-      setTimeout(() => { donateCooldown = false; }, 20000);
+          if (donorUpdateResult.modifiedCount === 0) {
+            throw new Error('Failed to update donor balance');
+          }
+          
+          // Update recipient donate_received
+          const recipientUpdateResult = await users.updateOne(
+            { _id: recipient._id },
+            { 
+              $inc: { 
+                donate_received: amount
+              } 
+            },
+            { session }
+          );
+
+          if (recipientUpdateResult.modifiedCount === 0) {
+            throw new Error('Failed to update recipient');
+          }
+        });
+      } finally {
+        await session.endSession();
+      }
+
+      // Set per-user cooldown
+      userCooldowns.set(discordId, Date.now());
+      
+      // Clean up old cooldowns (older than 1 hour)
+      const oneHourAgo = Date.now() - (60 * 60 * 1000);
+      for (const [userId, timestamp] of userCooldowns.entries()) {
+        if (timestamp < oneHourAgo) {
+          userCooldowns.delete(userId);
+        }
+      }
 
       // Embed phản hồi
       const embed = new EmbedBuilder()
@@ -180,10 +242,29 @@ module.exports = {
 
     } catch (error) {
       console.error('❌ Lỗi khi xử lý donate:', error);
+      
+      // Log detailed error for debugging
+      console.error('Error details:', {
+        discordId,
+        targetUsername,
+        amount,
+        error: error.message,
+        stack: error.stack
+      });
+      
       await interaction.reply({
         content: '⚠️ Có lỗi xảy ra khi xử lý donate. Vui lòng thử lại sau.',
         flags: MessageFlags.Ephemeral
       });
+    } finally {
+      // Ensure client is always closed
+      if (client) {
+        try {
+          await client.close();
+        } catch (closeError) {
+          console.error('Error closing database connection:', closeError);
+        }
+      }
     }
   }
 };

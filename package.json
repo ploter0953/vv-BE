@@ -12,22 +12,23 @@
     "server-only": "node server.js"
   },
   "dependencies": {
+    "@clerk/clerk-sdk-node": "^4.13.23",
+    "@clerk/express": "^1.7.6",
     "axios": "^1.6.0",
     "bcryptjs": "^2.4.3",
     "cloudinary": "^2.7.0",
     "cors": "^2.8.5",
+    "discord.js": "^14.19.3",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "express-rate-limit": "^7.1.5",
     "jsonwebtoken": "^9.0.2",
+    "mongodb": "^6.18.0",
     "mongoose": "^7.6.3",
     "multer": "^2.0.1",
     "pg": "^8.11.3",
     "pg-pool": "^3.6.1",
-    "sqlite3": "^5.1.6",
-    "@clerk/clerk-sdk-node": "^4.13.23",
-    "@clerk/express": "^1.7.6",
-    "discord.js": "^14.19.3"
+    "sqlite3": "^5.1.6"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"

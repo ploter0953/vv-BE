@@ -403,19 +403,32 @@ router.post('/', requireAuth(), createCollabLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Link YouTube không hợp lệ' });
     }
     
-    // Check stream status
+    // Check stream status with error handling
     const videoId = youtubeService.extractVideoId(youtubeLink);
-    const streamStatus = await youtubeService.checkStreamStatus(videoId, 5 * 60 * 1000); // 5 min cache for validation
-    
-    if (!streamStatus.isValid) {
+    if (!videoId) {
       return res.status(400).json({ 
-        error: 'Lỗi khi đăng collab. Link không hợp lệ hoặc stream đã bắt đầu' 
+        error: 'Link YouTube không hợp lệ' 
       });
     }
     
-    if (!streamStatus.isWaitingRoom) {
-      return res.status(400).json({ 
-        error: 'Lỗi khi đăng collab. Link không hợp lệ hoặc stream đã bắt đầu' 
+    try {
+      const streamStatus = await youtubeService.checkStreamStatus(videoId, 5 * 60 * 1000); // 5 min cache for validation
+      
+      if (!streamStatus.isValid) {
+        return res.status(400).json({ 
+          error: 'Lỗi khi đăng collab. Link không hợp lệ hoặc stream đã bắt đầu' 
+        });
+      }
+      
+      if (!streamStatus.isWaitingRoom) {
+        return res.status(400).json({ 
+          error: 'Lỗi khi đăng collab. Link không hợp lệ hoặc stream đã bắt đầu' 
+        });
+      }
+    } catch (error) {
+      console.error('Error checking stream status:', error);
+      return res.status(500).json({ 
+        error: 'Lỗi khi kiểm tra stream. Vui lòng thử lại sau.' 
       });
     }
 
@@ -482,6 +495,15 @@ router.post('/', requireAuth(), createCollabLimiter, async (req, res) => {
     });
     
     await collab.save();
+    
+    // Log successful collab creation
+    console.log('=== COLLAB CREATED ===');
+    console.log('Creator:', user.username);
+    console.log('Title:', title);
+    console.log('Type:', type);
+    console.log('Max Partners:', maxPartners);
+    console.log('YouTube Link:', youtubeLink);
+    console.log('Timestamp:', new Date().toISOString());
     
     // Populate user info for response
     await collab.populate('creator', 'username avatar');
@@ -602,17 +624,27 @@ router.post('/:id/match', requireAuth(), matchCollabLimiter, async (req, res) =>
       updateData[`youtube_link_${nextSlot}`] = youtubeLink;
     }
     
-    const updatedCollab = await Collab.findByIdAndUpdate(
-      collabId,
-      updateData,
-      { new: true }
-    ).populate('creator', 'username avatar')
-     .populate('partner_1', 'username avatar')
-     .populate('partner_2', 'username avatar')
-     .populate('partner_3', 'username avatar');
+    // Use transaction to ensure data consistency
+    const session = await mongoose.startSession();
+    let updatedCollab;
     
-    // Update status
-    await updateCollabStatus(collabId);
+    try {
+      await session.withTransaction(async () => {
+        updatedCollab = await Collab.findByIdAndUpdate(
+          collabId,
+          updateData,
+          { new: true, session }
+        ).populate('creator', 'username avatar')
+         .populate('partner_1', 'username avatar')
+         .populate('partner_2', 'username avatar')
+         .populate('partner_3', 'username avatar');
+        
+        // Update status within transaction
+        await updateCollabStatus(collabId);
+      });
+    } finally {
+      await session.endSession();
+    }
     
     res.json({ 
       collab: updatedCollab,
@@ -624,25 +656,7 @@ router.post('/:id/match', requireAuth(), matchCollabLimiter, async (req, res) =>
   }
 });
 
-// Test endpoint to check stream status
-router.get('/test-stream-status/:videoId', async (req, res) => {
-  try {
-    const { videoId } = req.params;
-    console.log('[test-stream-status] Checking videoId:', videoId);
-    
-    const streamStatus = await youtubeService.checkStreamStatus(videoId, 0); // No cache
-    console.log('[test-stream-status] Result:', streamStatus);
-    
-    res.json({
-      videoId,
-      streamStatus,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('[test-stream-status] Error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+
 
 // User gửi yêu cầu match collab (thêm vào mảng chờ, tối đa 10)
 router.post('/:id/request-match', requireAuth(), async (req, res) => {

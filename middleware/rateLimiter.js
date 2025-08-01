@@ -1,56 +1,56 @@
 const rateLimit = require('express-rate-limit');
 
-// Rate limiter cho tạo collab
-const createCollabLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 phút
-  max: 5, // Tối đa 5 lần tạo collab trong 15 phút
+// Rate limiter for Discord bot commands
+const discordCommandLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10, // limit each IP to 10 requests per windowMs
   message: {
-    error: 'Quá nhiều yêu cầu tạo collab',
-    message: 'Vui lòng thử lại sau 15 phút'
+    error: 'Too many requests from this IP, please try again later.'
   },
   standardHeaders: true,
   legacyHeaders: false,
 });
 
-// Rate limiter cho match collab
-const matchCollabLimiter = rateLimit({
-  windowMs: 5 * 60 * 1000, // 5 phút
-  max: 10, // Tối đa 10 lần match trong 5 phút
+// Rate limiter for donation webhook (per Discord ID)
+const donationWebhookLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 5, // limit each Discord ID to 5 donations per minute
+  keyGenerator: (req) => {
+    // Extract Discord ID from request body for rate limiting
+    const discordId = req.body?.data?.description?.match(/\b\d{17,19}\b/)?.[0];
+    return discordId || req.ip;
+  },
   message: {
-    error: 'Quá nhiều yêu cầu match',
-    message: 'Vui lòng thử lại sau 5 phút'
+    error: 'Too many donation attempts, please try again later.'
   },
   standardHeaders: true,
   legacyHeaders: false,
 });
 
-// Rate limiter cho API calls chung
+// Rate limiter for donation webhook
+const donationWebhookLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 30, // limit each IP to 30 requests per windowMs
+  message: {
+    error: 'Too many donation webhook requests, please try again later.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Rate limiter for API endpoints
 const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 phút
-  max: 100, // Tối đa 100 requests trong 15 phút
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
   message: {
-    error: 'Quá nhiều yêu cầu API',
-    message: 'Vui lòng thử lại sau 15 phút'
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-// Rate limiter cho YouTube API calls
-const youtubeApiLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 phút
-  max: 10, // Tối đa 10 calls YouTube API trong 1 phút
-  message: {
-    error: 'Quá nhiều yêu cầu kiểm tra YouTube',
-    message: 'Vui lòng thử lại sau 1 phút'
+    error: 'Too many API requests from this IP, please try again later.'
   },
   standardHeaders: true,
   legacyHeaders: false,
 });
 
 module.exports = {
-  createCollabLimiter,
-  matchCollabLimiter,
-  apiLimiter,
-  youtubeApiLimiter
+  discordCommandLimiter,
+  donationWebhookLimiter,
+  apiLimiter
 };
