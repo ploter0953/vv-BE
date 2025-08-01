@@ -3,6 +3,14 @@ const express = require('express');
 const router = express.Router();
 const mongo = require('./mongo');  // path tới file mongo.js
 
+// Test endpoint để kiểm tra webhook
+router.get('/test', (req, res) => {
+  res.json({ 
+    message: 'Webhook endpoint is working!',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Hàm trích xuất Discord ID từ description (chuỗi số 17-20 chữ số)
 function extractDiscordId(description) {
   const match = description.match(/\b\d{17,20}\b/);

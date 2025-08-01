@@ -178,6 +178,15 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
+// Webhook endpoint - completely bypass all middleware
+app.post('/webhook/casso', require('./donate/xulinaptien'));
+app.get('/webhook/casso/test', (req, res) => {
+  res.json({ 
+    message: 'Webhook endpoint is working!',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Apply origin validation middleware to all API routes except uploads
 app.use('/api', (req, res, next) => {
   // For upload endpoints, apply selective no-origin validation
@@ -200,6 +209,11 @@ app.use('/api', (req, res, next) => {
       });
     }
     
+    return next();
+  }
+  
+  // For webhook endpoints, skip origin validation (Casso, etc.)
+  if (req.path.startsWith('/casso-webhook')) {
     return next();
   }
   
@@ -268,6 +282,16 @@ app.use('/api', (req, res, next) => {
     return next();
   }
   
+  // For webhook endpoints, skip referer validation (Casso, etc.)
+  if (req.path.startsWith('/casso-webhook')) {
+    return next();
+  }
+  
+  // For webhook endpoints, skip referer validation (Casso, etc.)
+  if (req.path.startsWith('/casso-webhook')) {
+    return next();
+  }
+  
   // For non-upload endpoints, check referer
   // Block requests without referer (direct API access)
   if (!referer) {
@@ -299,6 +323,12 @@ app.use('/api', (req, res, next) => {
   // Skip user-agent check for upload endpoints
   if (req.path.startsWith('/upload/')) {
     console.log('Skipping user-agent validation for upload endpoint:', req.path);
+    return next();
+  }
+  
+  // Skip user-agent check for webhook endpoints (Casso, etc.)
+  if (req.path.startsWith('/casso-webhook')) {
+    console.log('Skipping user-agent validation for webhook endpoint:', req.path);
     return next();
   }
   
