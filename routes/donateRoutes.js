@@ -31,18 +31,36 @@ router.post('/web', async (req, res) => {
     
     // Check donor balance
     const donor = await users.findOne({ _id: donorObjectId });
+    console.log('Donor found:', { donorId: donor?._id, balance: donor?.balance, amount });
+    
     if (!donor) {
       await client.close();
       return res.status(404).json({ error: 'Người ủng hộ không tồn tại' });
     }
     
+    // Initialize balance if not exists
+    if (donor.balance === undefined || donor.balance === null) {
+      await users.updateOne(
+        { _id: donorObjectId },
+        { $set: { balance: 0 } }
+      );
+      donor.balance = 0;
+      console.log('Initialized balance for donor:', donorObjectId);
+    }
+    
     if (donor.balance < amount) {
       await client.close();
-      return res.status(400).json({ error: 'Số dư không đủ' });
+      return res.status(400).json({ 
+        error: 'Số dư không đủ', 
+        currentBalance: donor.balance,
+        requiredAmount: amount 
+      });
     }
     
     // Check recipient exists
     const recipient = await users.findOne({ _id: recipientObjectId });
+    console.log('Recipient found:', { recipientId: recipient?._id, username: recipient?.username });
+    
     if (!recipient) {
       await client.close();
       return res.status(404).json({ error: 'Người nhận không tồn tại' });
