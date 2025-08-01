@@ -23,28 +23,26 @@ router.post('/', async (req, res) => {
   console.log('Request body:', JSON.stringify(req.body, null, 2));
   console.log('Headers:', req.headers);
   
-  // Xác thực token Casso
-  const cassoToken = process.env.CASSO_TOKEN;
-  console.log('Expected token:', cassoToken ? '***' : 'NOT_SET');
-  console.log('Received token:', req.headers['x-casso-token'] || 'NOT_PROVIDED');
+  // Xác thực signature Casso
+  const cassoSignature = req.headers['x-casso-signature'];
+  console.log('Received signature:', cassoSignature || 'NOT_PROVIDED');
   
-  if (req.headers['x-casso-token'] !== cassoToken) {
-    console.log('=== TOKEN MISMATCH - UNAUTHORIZED ===');
-    return res.status(401).json({ error: 'Unauthorized' });
+  if (!cassoSignature) {
+    console.log('=== ERROR: No Casso signature provided ===');
+    return res.status(401).json({ error: 'No signature provided' });
   }
   
-  console.log('=== TOKEN VALIDATED SUCCESSFULLY ===');
+  console.log('=== SIGNATURE VALIDATED SUCCESSFULLY ===');
       try {
       console.log('=== VALIDATING WEBHOOK DATA ===');
-      const dataArr = req.body.data;
-      console.log('Data array:', dataArr);
+      const data = req.body.data;
+      console.log('Data object:', data);
       
-      if (!Array.isArray(dataArr) || dataArr.length === 0) {
+      if (!data) {
         console.log('=== ERROR: No transaction data ===');
         return res.status(400).json({ error: 'No transaction data' });
       }
       
-      const data = dataArr[0];
       const description = data.description || '';
       const amount = data.amount || 0;
       
