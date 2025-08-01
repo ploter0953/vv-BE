@@ -1,8 +1,8 @@
 // mongo.js
 const { MongoClient } = require('mongodb');
 
-const uri = process.env.MONGO_URI;
-if (!uri) throw new Error('MONGO_URI env variable is required!');
+const uri = process.env.MONGODB_URI;
+if (!uri) throw new Error('MONGODB_URI env variable is required!');
 const client = new MongoClient(uri);
 
 const dbName = 'vtuberverse';

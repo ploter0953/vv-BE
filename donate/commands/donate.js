@@ -3,8 +3,8 @@ const { saveDonation } = require('../mongo');
 const { MongoClient } = require('mongodb');
 
 const LOG_CHANNEL_ID = '1279062001586278411'; // Thay bằng kênh log thực tế
-const MONGO_URI = process.env.MONGO_URI;
-if (!MONGO_URI) throw new Error('MONGO_URI env variable is required!');
+const MONGO_URI = process.env.MONGODB_URI;
+if (!MONGO_URI) throw new Error('MONGODB_URI env variable is required!');
 const DB_NAME = 'vtuberverse';
 const USERS_COLLECTION = 'users';
 const DONATIONS_COLLECTION = 'donations';

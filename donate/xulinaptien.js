@@ -36,7 +36,7 @@ router.post('/', async (req, res) => {
 
     // Tìm user với discord_id đã xác minh
     const { MongoClient } = require('mongodb');
-    const client = new MongoClient(process.env.MONGO_URI);
+    const client = new MongoClient(process.env.MONGODB_URI);
     await client.connect();
     const db = client.db('vtuberverse');
     const users = db.collection('users');

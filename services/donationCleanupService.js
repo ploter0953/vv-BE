@@ -29,9 +29,9 @@ class DonationCleanupService {
 
   async cleanupOldDonations() {
     try {
-      const MONGO_URI = process.env.MONGO_URI;
+      const MONGO_URI = process.env.MONGODB_URI;
       if (!MONGO_URI) {
-        console.error('MONGO_URI not found');
+        console.error('MONGODB_URI not found');
         return;
       }
 

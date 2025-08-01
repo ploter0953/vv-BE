@@ -9,7 +9,7 @@ const xulinaptienRouter = require('../donate/xulinaptien');
 // Routes
 router.get('/latest', async (req, res) => {
   try {
-    const MONGO_URI = process.env.MONGO_URI;
+    const MONGO_URI = process.env.MONGODB_URI;
     const client = new MongoClient(MONGO_URI);
     await client.connect();
     
@@ -61,7 +61,7 @@ router.get('/balance/:discordId', async (req, res) => {
 // Get leaderboard
 router.get('/leaderboard', async (req, res) => {
   try {
-    const MONGO_URI = process.env.MONGO_URI;
+    const MONGO_URI = process.env.MONGODB_URI;
     const client = new MongoClient(MONGO_URI);
     await client.connect();
     
@@ -138,7 +138,7 @@ router.get('/user/:userId/history', async (req, res) => {
 // Get recent donations for polling
 router.get('/recent', async (req, res) => {
   try {
-    const MONGO_URI = process.env.MONGO_URI;
+    const MONGO_URI = process.env.MONGODB_URI;
     const client = new MongoClient(MONGO_URI);
     await client.connect();
     

@@ -14,8 +14,8 @@ const io = new Server(server, {
   }
 });
 
-const MONGO_URI = process.env.MONGO_URI;
-if (!MONGO_URI) throw new Error('MONGO_URI env variable is required!');
+const MONGO_URI = process.env.MONGODB_URI;
+if (!MONGO_URI) throw new Error('MONGODB_URI env variable is required!');
 const DB_NAME = 'vtuberverse';
 const COLLECTION_NAME = 'donations';
 
