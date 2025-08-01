@@ -257,12 +257,10 @@ app.use('/api', (req, res, next) => {
   
   // Check if origin is allowed
   if (allowedOrigins.includes(origin)) {
-    console.log(`Origin ${origin} is allowed`);
     return next();
   }
   
   // Block unauthorized origin
-  console.log(`Origin ${origin} is NOT allowed - blocking request`);
   return res.status(403).json({
     error: 'Truy cập không được phép từ domain này',
     message: 'Vui lòng truy cập từ domain chính thức: https://www.projectvtuber.com',
