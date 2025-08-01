@@ -1,5 +1,4 @@
 const { Client, GatewayIntentBits, Collection, MessageFlags } = require('discord.js');
-const { connectMongo } = require('../donate/mongo');
 
 class DiscordBotService {
   constructor() {
@@ -12,8 +11,7 @@ class DiscordBotService {
 
   async initialize() {
     try {
-      // Connect to MongoDB
-      await connectMongo();
+      // MongoDB connection is now lazy-loaded, no need to connect here
 
       // Load commands
       this.loadCommands();

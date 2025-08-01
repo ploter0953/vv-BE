@@ -111,6 +111,16 @@ module.exports = {
         }
       );
 
+      // Cập nhật donate_received cho recipient
+      await users.updateOne(
+        { _id: recipient._id },
+        { 
+          $inc: { 
+            donate_received: amount
+          } 
+        }
+      );
+
       // Cooldown 20 giây
       donateCooldown = true;
       setTimeout(() => { donateCooldown = false; }, 20000);

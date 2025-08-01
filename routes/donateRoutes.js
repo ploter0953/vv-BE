@@ -58,25 +58,46 @@ router.get('/balance/:discordId', async (req, res) => {
   }
 });
 
-// Get leaderboard
-router.get('/leaderboard', async (req, res) => {
+// Get leaderboard with type parameter
+router.get('/leaderboard/:type', async (req, res) => {
   try {
+    const { type } = req.params; // 'donators' or 'vtubers'
     const MONGO_URI = process.env.MONGODB_URI;
     const client = new MongoClient(MONGO_URI);
     await client.connect();
     
     const db = client.db('vtuberverse');
-    const users = db.collection('donate_users');
+    const users = db.collection('users'); // Use main users collection
+    
+    let sortField;
+    if (type === 'donators') {
+      sortField = 'donated';
+    } else if (type === 'vtubers') {
+      sortField = 'donate_received';
+    } else {
+      return res.status(400).json({ error: 'Invalid leaderboard type' });
+    }
     
     const leaderboard = await users
-      .find({})
-      .sort({ donated: -1 })
+      .find({ [sortField]: { $gt: 0 } }) // Only users with donations
+      .sort({ [sortField]: -1 })
       .limit(10)
+      .project({
+        username: 1,
+        avatar: 1,
+        donated: 1,
+        donate_received: 1,
+        role: 1
+      })
       .toArray();
     
     await client.close();
     
-    res.json({ leaderboard });
+    res.json({ 
+      leaderboard,
+      type,
+      title: type === 'donators' ? 'Top Donators' : 'Top Vtubers'
+    });
   } catch (error) {
     console.error('Error getting leaderboard:', error);
     res.status(500).json({ error: 'Internal server error' });

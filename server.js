@@ -98,12 +98,10 @@ const validateOrigin = (req, res, next) => {
   const allowedOrigins = getAllowedOrigins();
   
   // Log origin for debugging
-  console.log(`Request origin: ${origin}`);
-  console.log(`Allowed origins: ${allowedOrigins.join(', ')}`);
+  
   
   // Block requests with no origin (direct API access, Postman, curl, etc.)
   if (!origin) {
-    console.log('No origin header - BLOCKING request (direct API access not allowed)');
     return res.status(403).json({
       error: 'Truy cập trực tiếp API không được phép',
       message: 'Vui lòng truy cập từ domain chính thức: https://www.projectvtuber.com',
@@ -113,12 +111,10 @@ const validateOrigin = (req, res, next) => {
   
   // Check if origin is allowed
   if (allowedOrigins.includes(origin)) {
-    console.log(`Origin ${origin} is allowed`);
     return next();
   }
   
   // Block unauthorized origin
-  console.log(`Origin ${origin} is NOT allowed - blocking request`);
   return res.status(403).json({
     error: 'Truy cập không được phép từ domain này',
     message: 'Vui lòng truy cập từ domain chính thức: https://www.projectvtuber.com',
@@ -154,20 +150,16 @@ const corsOptions = {
     
     // Allow requests with no origin ONLY for upload endpoints (needed for some browsers/networks)
     if (!origin) {
-      console.log('CORS: No origin header detected');
       // We'll handle this case in the upload-specific middleware
       return callback(null, true);
     }
     
     // Check if origin is allowed
     if (allowedOrigins.includes(origin)) {
-      console.log(`CORS: Origin ${origin} is allowed`);
       return callback(null, true);
     }
     
     // Block unauthorized origin
-    console.log(`CORS: Origin ${origin} is NOT allowed - blocking request`);
-    console.log(`CORS: Allowed origins: ${allowedOrigins.join(', ')}`);
     return callback(new Error('Truy cập không được phép từ domain này'), false);
   },
   credentials: true, // Enable credentials for cross-origin requests
@@ -327,7 +319,6 @@ app.use('/api', (req, res, next) => {
   // For non-upload endpoints, check referer
   // Block requests without referer (direct API access)
   if (!referer) {
-    console.log('No referer header - BLOCKING request (direct API access not allowed)');
     return res.status(403).json({
       error: 'Truy cập trực tiếp API không được phép',
       message: 'Vui lòng truy cập từ domain chính thức: https://www.projectvtuber.com'
@@ -339,14 +330,11 @@ app.use('/api', (req, res, next) => {
   const refererOrigin = refererUrl.origin;
   
   if (!allowedOrigins.includes(refererOrigin)) {
-    console.log(`Referer ${refererOrigin} is NOT allowed - blocking request`);
     return res.status(403).json({
       error: 'Truy cập không được phép từ domain này',
       message: 'Vui lòng truy cập từ domain chính thức: https://www.projectvtuber.com'
     });
   }
-  
-  console.log(`Referer ${refererOrigin} is allowed`);
   next();
 });
 
@@ -744,14 +732,13 @@ app.put('/api/users/:id', requireAuth(), async (req, res) => {
     };
 
     // Ghi log chi tiết trước khi cập nhật
-    console.log('[PROFILE UPDATE] User', userId, 'is updating profile. Old data:', user.toObject());
-    console.log('[PROFILE UPDATE] New data:', updateData);
+
 
     const updatedUser = await User.findByIdAndUpdate(user._id, updateData, { new: true, runValidators: true });
     if (!updatedUser) {
       return res.status(404).json({ error: 'Người dùng không tồn tại' });
     }
-    console.log('Profile updated successfully for user:', userId);
+    
     res.json({ message: 'Cập nhật profile thành công' });
   } catch (error) {
     console.error('[PROFILE UPDATE ERROR] Lỗi khi cập nhật profile cho user', userId, ':', error);

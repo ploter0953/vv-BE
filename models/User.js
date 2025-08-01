@@ -24,6 +24,7 @@ const userSchema = new mongoose.Schema({
   // Donate fields
   balance: { type: Number, default: 0 }, // Số dư từ nạp tiền
   donated: { type: Number, default: 0 }, // Số tiền đã donate
+  donate_received: { type: Number, default: 0 }, // Số tiền đã nhận donate
   discord_id: { type: String, default: '' }, // Discord ID của user
   is_discord_verified: { type: Boolean, default: false }, // Trạng thái xác minh Discord
   
