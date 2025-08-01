@@ -11,6 +11,8 @@ router.post('/web', async (req, res) => {
   try {
     const { donorId, recipientId, displayName, amount, message } = req.body;
     
+    console.log('Web donate request:', { donorId, recipientId, displayName, amount, message });
+    
     if (!donorId || !recipientId || !displayName || !amount) {
       return res.status(400).json({ error: 'Thiếu thông tin bắt buộc' });
     }
@@ -22,8 +24,13 @@ router.post('/web', async (req, res) => {
     const db = client.db('vtuberverse');
     const users = db.collection('users');
     
+    // Convert string IDs to ObjectId if needed
+    const { ObjectId } = require('mongodb');
+    const donorObjectId = typeof donorId === 'string' ? new ObjectId(donorId) : donorId;
+    const recipientObjectId = typeof recipientId === 'string' ? new ObjectId(recipientId) : recipientId;
+    
     // Check donor balance
-    const donor = await users.findOne({ _id: donorId });
+    const donor = await users.findOne({ _id: donorObjectId });
     if (!donor) {
       await client.close();
       return res.status(404).json({ error: 'Người ủng hộ không tồn tại' });
@@ -35,7 +42,7 @@ router.post('/web', async (req, res) => {
     }
     
     // Check recipient exists
-    const recipient = await users.findOne({ _id: recipientId });
+    const recipient = await users.findOne({ _id: recipientObjectId });
     if (!recipient) {
       await client.close();
       return res.status(404).json({ error: 'Người nhận không tồn tại' });
@@ -49,7 +56,7 @@ router.post('/web', async (req, res) => {
     
     // Update donor balance and donated amount
     await users.updateOne(
-      { _id: donorId },
+      { _id: donorObjectId },
       { 
         $inc: { 
           balance: -amount,
@@ -60,7 +67,7 @@ router.post('/web', async (req, res) => {
     
     // Update recipient donate_received
     await users.updateOne(
-      { _id: recipientId },
+      { _id: recipientObjectId },
       { 
         $inc: { 
           donate_received: amount
@@ -86,6 +93,8 @@ router.post('/web', async (req, res) => {
     await donations.insertOne(donationData);
     
     await client.close();
+    
+    console.log('Web donate success:', { amount, displayName });
     
     res.json({ 
       success: true, 
