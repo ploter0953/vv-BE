@@ -27,12 +27,12 @@ const donationWebhookLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Rate limiter for donation webhook
-const donationWebhookLimiter = rateLimit({
+// Rate limiter for general webhook requests
+const webhookLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   max: 30, // limit each IP to 30 requests per windowMs
   message: {
-    error: 'Too many donation webhook requests, please try again later.'
+    error: 'Too many webhook requests, please try again later.'
   },
   standardHeaders: true,
   legacyHeaders: false,
@@ -49,8 +49,51 @@ const apiLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Rate limiter for creating collabs
+const createCollabLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  max: 3, // limit each user to 3 collab creations per 5 minutes
+  keyGenerator: (req) => {
+    return req.auth?.userId || req.auth?.user?.id || req.ip;
+  },
+  message: {
+    error: 'Too many collab creation attempts, please try again later.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Rate limiter for matching collabs
+const matchCollabLimiter = rateLimit({
+  windowMs: 2 * 60 * 1000, // 2 minutes
+  max: 5, // limit each user to 5 match attempts per 2 minutes
+  keyGenerator: (req) => {
+    return req.auth?.userId || req.auth?.user?.id || req.ip;
+  },
+  message: {
+    error: 'Too many match attempts, please try again later.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Rate limiter for YouTube API calls
+const youtubeApiLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 20, // limit each IP to 20 YouTube API calls per minute
+  message: {
+    error: 'Too many YouTube API requests, please try again later.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 module.exports = {
   discordCommandLimiter,
   donationWebhookLimiter,
-  apiLimiter
+  webhookLimiter,
+  apiLimiter,
+  createCollabLimiter,
+  matchCollabLimiter,
+  youtubeApiLimiter
 };

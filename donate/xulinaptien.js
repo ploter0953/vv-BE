@@ -27,20 +27,11 @@ function extractDiscordId(description) {
   return discordId;
 }
 
-// Rate limiting for webhook
-const rateLimit = require('express-rate-limit');
-const webhookLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 10, // limit each IP to 10 requests per minute
-  message: {
-    error: 'Too many webhook requests, please try again later.'
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+// Import rate limiters from middleware
+const { donationWebhookLimiter } = require('../middleware/rateLimiter');
 
 // Endpoint webhook Casso
-router.post('/', webhookLimiter, async (req, res) => {
+router.post('/', donationWebhookLimiter, async (req, res) => {
   console.log('=== PROCESSING CASSO WEBHOOK ===');
   console.log('Request body:', JSON.stringify(req.body, null, 2));
   console.log('Headers:', req.headers);
