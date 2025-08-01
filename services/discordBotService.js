@@ -21,8 +21,9 @@ class DiscordBotService {
 
       // Login to Discord
       const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
-      if (!DISCORD_BOT_TOKEN) {
-        throw new Error('DISCORD_BOT_TOKEN env variable is required!');
+      if (!DISCORD_BOT_TOKEN || DISCORD_BOT_TOKEN === 'test_discord_bot_token') {
+        console.warn('DISCORD_BOT_TOKEN not configured or using test value - Discord bot will not start');
+        return;
       }
 
       await this.client.login(DISCORD_BOT_TOKEN);

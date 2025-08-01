@@ -57,6 +57,43 @@ router.get('/clerk/:clerkId', async (req, res) => {
   }
 });
 
+// Sync Clerk user with backend
+router.post('/sync-clerk', async (req, res) => {
+  try {
+    const { clerkId, email, username, avatar } = req.body;
+    
+    if (!clerkId) {
+      return res.status(400).json({ message: 'Clerk ID is required' });
+    }
+    
+    // Try to find existing user by clerkId
+    let user = await User.findOne({ clerkId });
+    
+    if (user) {
+      // Update existing user
+      user.email = email || user.email;
+      user.username = username || user.username;
+      user.avatar = avatar || user.avatar;
+      await user.save();
+    } else {
+      // Create new user
+      user = new User({
+        clerkId,
+        email,
+        username,
+        avatar,
+        badges: ['member']
+      });
+      await user.save();
+    }
+    
+    res.json({ user });
+  } catch (err) {
+    console.error('Error syncing Clerk user:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // Lấy user theo username (PHẢI đặt trước route /:id)
 router.get('/username/:username', async (req, res) => {
   try {

@@ -5,12 +5,12 @@ require('dotenv').config();
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID;
 
-if (!DISCORD_BOT_TOKEN || DISCORD_BOT_TOKEN === 'your_discord_bot_token_here') {
+if (!DISCORD_BOT_TOKEN || DISCORD_BOT_TOKEN === 'your_discord_bot_token_here' || DISCORD_BOT_TOKEN === 'test_discord_bot_token') {
   console.error('❌ DISCORD_BOT_TOKEN is not set or is placeholder');
   process.exit(1);
 }
 
-if (!DISCORD_CLIENT_ID || DISCORD_CLIENT_ID === 'your_discord_client_id_here') {
+if (!DISCORD_CLIENT_ID || DISCORD_CLIENT_ID === 'your_discord_client_id_here' || DISCORD_CLIENT_ID === 'test_discord_client_id') {
   console.error('❌ DISCORD_CLIENT_ID is not set or is placeholder');
   process.exit(1);
 }

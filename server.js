@@ -2225,13 +2225,21 @@ setInterval(updateUserOnlineStatus, 60000); // Check every minute
 // Initialize Discord bot and donate functionality
 async function initializeDonateSystem() {
   try {
-    // Initialize Discord bot
-    await discordBotService.initialize();
-    console.log('Discord bot initialized successfully');
+    // Initialize Discord bot (will skip if no token configured)
+    try {
+      await discordBotService.initialize();
+      console.log('Discord bot initialized successfully');
+    } catch (error) {
+      console.log('Discord bot initialization skipped (no valid token configured)');
+    }
     
     // Start donation cleanup service
-    await donationCleanupService.start();
-    console.log('Donation cleanup service started');
+    try {
+      await donationCleanupService.start();
+      console.log('Donation cleanup service started');
+    } catch (error) {
+      console.log('Donation cleanup service initialization skipped');
+    }
     
     console.log('Donate system initialized successfully');
   } catch (error) {
