@@ -1,7 +1,7 @@
 // xulinaptien.js
 const express = require('express');
 const router = express.Router();
-const mongo = require('../db/mongo');  // path tới file mongo.js
+const mongo = require('./mongo');  // path tới file mongo.js
 
 // Hàm trích xuất Discord ID từ description (chuỗi số 17-20 chữ số)
 function extractDiscordId(description) {
