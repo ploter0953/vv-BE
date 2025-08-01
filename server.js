@@ -728,7 +728,9 @@ app.put('/api/users/:id', requireAuth(), async (req, res) => {
       artist_description: artist_description || user.artist_description,
       youtube: youtube || user.youtube,
       twitch: twitch || user.twitch,
-      tiktok: tiktok || user.tiktok
+      tiktok: tiktok || user.tiktok,
+      discord_id: req.body.discord_id || user.discord_id || '',
+      discord: req.body.discord || user.discord || ''
     };
 
     // Ghi log chi tiết trước khi cập nhật

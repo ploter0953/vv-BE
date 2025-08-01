@@ -18,7 +18,8 @@ async function deployCommands() {
         console.log('✅ Discord commands deployed successfully!');
         resolve();
       } else {
-        console.log('⚠️ Discord commands deployment failed, but continuing with server start...');
+        console.log('⚠️ Discord commands deployment failed (likely due to missing env vars), but continuing with server start...');
+        console.log('⚠️ Please set DISCORD_BOT_TOKEN and DISCORD_CLIENT_ID in environment variables');
         resolve(); // Continue anyway
       }
     });

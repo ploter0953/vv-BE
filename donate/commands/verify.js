@@ -47,12 +47,16 @@ module.exports = {
         });
       }
 
-      // Cập nhật trạng thái xác minh
+      // Lấy Discord username từ interaction
+      const discordUsername = interaction.user.username;
+      
+      // Cập nhật trạng thái xác minh và Discord username
       await users.updateOne(
         { _id: user._id },
         { 
           $set: { 
-            is_discord_verified: true 
+            is_discord_verified: true,
+            discord: discordUsername // Lưu Discord username
           } 
         }
       );

@@ -18,6 +18,7 @@ const userSchema = new mongoose.Schema({
   twitch: String,
   youtube: String,
   tiktok: String,
+  discord: String, // Discord username (sau khi verify)
   lastSeen: { type: Date, default: Date.now }, // Track online status
   isOnline: { type: Boolean, default: false }, // Real-time online status
   
