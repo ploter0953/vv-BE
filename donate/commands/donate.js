@@ -19,6 +19,11 @@ module.exports = {
       option.setName('username')
         .setDescription('Username của người nhận donate trên projectvtuber.com')
         .setRequired(true))
+    .addStringOption(option =>
+      option.setName('display_name')
+        .setDescription('Tên hiển thị khi donate')
+        .setRequired(true)
+        .setMaxLength(50))
     .addIntegerOption(option =>
       option.setName('amount')
         .setDescription('Số tiền donate (bội số 10,000 VNĐ)')
@@ -40,6 +45,7 @@ module.exports = {
 
     const discordId = interaction.user.id;
     const targetUsername = interaction.options.getString('username');
+    const displayName = interaction.options.getString('display_name');
     const amount = interaction.options.getInteger('amount');
     const message = interaction.options.getString('message') || 'Không có';
 
@@ -130,7 +136,7 @@ module.exports = {
         .setColor('#00FF00')
         .setTitle('🎉 Donate thành công!')
         .addFields(
-          { name: 'Người donate', value: donor.username || interaction.user.username, inline: true },
+          { name: 'Người donate', value: displayName, inline: true },
           { name: 'Người nhận', value: recipient.username, inline: true },
           { name: 'Số tiền', value: `${amount.toLocaleString()} VNĐ`, inline: true },
           { name: 'Lời nhắn', value: String(message) },
@@ -162,7 +168,7 @@ module.exports = {
       // Save donation record cho recipient
       const donationData = {
         userId: recipient._id.toString(), // Lưu cho người nhận donate
-        name: donor.username || interaction.user.username,
+        name: displayName, // Sử dụng display name thay vì username
         amount: amount,
         message: message,
         source: 'discord',

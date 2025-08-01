@@ -50,8 +50,13 @@ module.exports = {
       // Lấy Discord username từ interaction
       const discordUsername = interaction.user.username;
       
+      console.log('=== DISCORD VERIFY ===');
+      console.log('User ID:', user._id);
+      console.log('Discord ID:', discordId);
+      console.log('Discord Username:', discordUsername);
+      
       // Cập nhật trạng thái xác minh và Discord username
-      await users.updateOne(
+      const updateResult = await users.updateOne(
         { _id: user._id },
         { 
           $set: { 
@@ -60,6 +65,8 @@ module.exports = {
           } 
         }
       );
+      
+      console.log('Update result:', updateResult);
 
       // Tạo embed thông báo thành công
       const embed = new EmbedBuilder()

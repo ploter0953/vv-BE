@@ -6,6 +6,100 @@ const path = require('path');
 // Import donate modules
 const xulinaptienRouter = require('../donate/xulinaptien');
 
+// Web donate endpoint
+router.post('/web', async (req, res) => {
+  try {
+    const { donorId, recipientId, displayName, amount, message } = req.body;
+    
+    if (!donorId || !recipientId || !displayName || !amount) {
+      return res.status(400).json({ error: 'Thiếu thông tin bắt buộc' });
+    }
+
+    const MONGO_URI = process.env.MONGODB_URI;
+    const client = new MongoClient(MONGO_URI);
+    await client.connect();
+    
+    const db = client.db('vtuberverse');
+    const users = db.collection('users');
+    
+    // Check donor balance
+    const donor = await users.findOne({ _id: donorId });
+    if (!donor) {
+      await client.close();
+      return res.status(404).json({ error: 'Người ủng hộ không tồn tại' });
+    }
+    
+    if (donor.balance < amount) {
+      await client.close();
+      return res.status(400).json({ error: 'Số dư không đủ' });
+    }
+    
+    // Check recipient exists
+    const recipient = await users.findOne({ _id: recipientId });
+    if (!recipient) {
+      await client.close();
+      return res.status(404).json({ error: 'Người nhận không tồn tại' });
+    }
+    
+    // Check amount validation
+    if (amount < 10000 || amount % 10000 !== 0) {
+      await client.close();
+      return res.status(400).json({ error: 'Số tiền phải lớn hơn 10,000 VNĐ và là bội số của 10,000 VNĐ' });
+    }
+    
+    // Update donor balance and donated amount
+    await users.updateOne(
+      { _id: donorId },
+      { 
+        $inc: { 
+          balance: -amount,
+          donated: amount
+        } 
+      }
+    );
+    
+    // Update recipient donate_received
+    await users.updateOne(
+      { _id: recipientId },
+      { 
+        $inc: { 
+          donate_received: amount
+        } 
+      }
+    );
+    
+    // Save donation record
+    const donations = db.collection('donations');
+    const donationData = {
+      userId: recipientId,
+      donate: [{
+        name: displayName,
+        amount: amount,
+        message: message || '',
+        timestamp: new Date(),
+        donorId: donorId,
+        source: 'web'
+      }],
+      createdAt: new Date()
+    };
+    
+    await donations.insertOne(donationData);
+    
+    await client.close();
+    
+    res.json({ 
+      success: true, 
+      message: 'Ủng hộ thành công',
+      amount: amount,
+      displayName: displayName
+    });
+    
+  } catch (error) {
+    console.error('Web donate error:', error);
+    res.status(500).json({ error: 'Lỗi server' });
+  }
+});
+
 // Routes
 router.get('/latest', async (req, res) => {
   try {
