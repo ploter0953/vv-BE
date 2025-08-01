@@ -1,11 +1,4 @@
 const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
-const { MongoClient } = require('mongodb');
-
-// Cấu hình MongoDB
-const MONGO_URI = process.env.MONGODB_URI;
-if (!MONGO_URI) throw new Error('MONGODB_URI env variable is required!');
-const DB_NAME = 'vtuberverse';
-const COLLECTION_NAME = 'users';
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -15,6 +8,13 @@ module.exports = {
   async execute(interaction) {
     const discordId = interaction.user.id;
     const username = interaction.user.tag;
+
+    // Cấu hình MongoDB - chỉ load khi execute
+    const { MongoClient } = require('mongodb');
+    const MONGO_URI = process.env.MONGODB_URI;
+    if (!MONGO_URI) throw new Error('MONGODB_URI env variable is required!');
+    const DB_NAME = 'vtuberverse';
+    const COLLECTION_NAME = 'users';
 
     const client = new MongoClient(MONGO_URI);
 

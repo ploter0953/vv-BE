@@ -3,18 +3,21 @@ const { MongoClient } = require('mongodb');
 
 const uri = process.env.MONGODB_URI;
 if (!uri) throw new Error('MONGODB_URI env variable is required!');
-const client = new MongoClient(uri);
 
 const dbName = 'vtuberverse';
-let db;
-let users;
-let donations;
 
-async function connectMongo() {
-  try {
+// Lazy connection - chỉ kết nối khi cần
+let client = null;
+let db = null;
+let users = null;
+let donations = null;
+
+async function getConnection() {
+  if (!client) {
+    client = new MongoClient(uri);
     await client.connect();
     db = client.db(dbName);
-
+    
     // Kiểm tra và tạo collection donate_users nếu chưa tồn tại
     const collections = await db.listCollections({ name: 'donate_users' }).toArray();
     if (collections.length === 0) {
@@ -32,15 +35,13 @@ async function connectMongo() {
     users = db.collection('donate_users');
     donations = db.collection('donations');
     console.log('Đã kết nối với database donate system.');
-  } catch (err) {
-    console.error('❌ Lỗi kết nối MongoDB:', err);
-    process.exit(1); // thoát nếu không kết nối được
   }
+  return { client, db, users, donations };
 }
 
 // Tìm user theo discordId, nếu chưa có thì tạo mới với balance=0
 async function findOrCreateUser(discordId) {
-  if (!users) throw new Error('Chưa kết nối MongoDB');
+  const { users } = await getConnection();
   let user = await users.findOne({ _id: discordId });
   if (!user) {
     user = { _id: discordId, balance: 0, donated: 0 };
@@ -52,6 +53,7 @@ async function findOrCreateUser(discordId) {
 
 // Cộng tiền cho user (atomic, đảm bảo user tồn tại)
 async function addBalance(discordId, amount) {
+  const { users } = await getConnection();
   const result = await users.updateOne(
     { _id: discordId },
     { $inc: { balance: amount } },
@@ -62,6 +64,7 @@ async function addBalance(discordId, amount) {
 
 // Trừ tiền cho user (atomic, đảm bảo user tồn tại và đủ số dư)
 async function deductBalance(discordId, amount) {
+  const { users } = await getConnection();
   const result = await users.updateOne(
     { _id: discordId, balance: { $gte: amount } },
     { $inc: { balance: -amount } },
@@ -72,16 +75,16 @@ async function deductBalance(discordId, amount) {
   }
   console.log(`📤 Đã trừ ${amount} từ user ${discordId}`);
 }
+
 async function getBalance(discordId) {
-  const db = client.db('vtuberverse');
-  const col = db.collection('donate_users');
-
-  const user = await col.findOne({_id: discordId });
-
+  const { users } = await getConnection();
+  const user = await users.findOne({_id: discordId });
   return user?.balance || 0;
 }
+
 // Cộng dồn tổng số tiền đã donate
 async function addDonated(discordId, amount) {
+  const { users } = await getConnection();
   await users.updateOne(
     { _id: discordId },
     { $inc: { donated: amount } },
@@ -90,63 +93,84 @@ async function addDonated(discordId, amount) {
   console.log(`Đã cộng dồn ${amount} vào donated cho user ${discordId}`);
 }
 
-            // Lưu donation record với cấu trúc mới
-            async function saveDonation(donationData) {
-              const donation = {
-                id: donationData.userId, // ID người nhận donate
-                donate: [{
-                  name: donationData.name,
-                  amount: donationData.amount,
-                  message: donationData.message || '',
-                  timestamp: new Date(),
-                  donorId: donationData.donorId || null // Thêm thông tin donor
-                }],
-                createdAt: new Date()
-              };
+// Lưu donation record với cấu trúc mới
+async function saveDonation(donationData) {
+  const { donations } = await getConnection();
+  const donation = {
+    id: donationData.userId, // ID người nhận donate
+    donate: [{
+      name: donationData.name,
+      amount: donationData.amount,
+      message: donationData.message || '',
+      timestamp: new Date(),
+      donorId: donationData.donorId || null // Thêm thông tin donor
+    }],
+    createdAt: new Date()
+  };
   
-  // Kiểm tra xem đã có record cho user này chưa
-  const existingRecord = await donations.findOne({ id: donationData.userId });
-  
-  if (existingRecord) {
-    // Nếu đã có, thêm vào mảng donate
-    await donations.updateOne(
-      { id: donationData.userId },
-      { 
-        $push: { donate: donation.donate[0] },
-        $set: { createdAt: new Date() }
-      }
-    );
-  } else {
-    // Nếu chưa có, tạo mới
-    await donations.insertOne(donation);
+  await donations.insertOne(donation);
+  console.log(`💝 Đã lưu donation record cho user ${donationData.userId}`);
+}
+
+// Lấy danh sách donation của user
+async function getUserDonations(userId, limit = 10) {
+  const { donations } = await getConnection();
+  const donationRecord = await donations.findOne({ id: userId });
+  if (!donationRecord || !donationRecord.donate) {
+    return [];
   }
   
-  console.log(`Đã lưu donation: ${donationData.name} - ${donationData.amount} cho user ${donationData.userId}`);
-  return donation;
-}
-
-// Lấy danh sách donations của user
-async function getUserDonations(userId, limit = 10) {
-  const record = await donations.findOne({ id: userId });
-  if (!record || !record.donate) return [];
+  // Sắp xếp theo timestamp mới nhất
+  const sortedDonations = donationRecord.donate.sort((a, b) => 
+    new Date(b.timestamp) - new Date(a.timestamp)
+  );
   
-  // Sắp xếp theo timestamp mới nhất và giới hạn số lượng
-  return record.donate
-    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-    .slice(0, limit);
+  return sortedDonations.slice(0, limit);
 }
 
-// Lấy tổng số tiền donate của user
+// Lấy tổng số tiền đã donate của user
 async function getUserTotalDonated(userId) {
-  const record = await donations.findOne({ id: userId });
-  if (!record || !record.donate) return 0;
+  const { donations } = await getConnection();
+  const donationRecord = await donations.findOne({ id: userId });
+  if (!donationRecord || !donationRecord.donate) {
+    return 0;
+  }
   
-  return record.donate.reduce((total, donation) => total + donation.amount, 0);
+  return donationRecord.donate.reduce((total, donation) => total + donation.amount, 0);
 }
 
-// Lấy số dư user
+// Lấy top donors
+async function getTopDonors(limit = 10) {
+  const { donations } = await getConnection();
+  const pipeline = [
+    {
+      $group: {
+        _id: '$id',
+        totalDonated: { $sum: { $reduce: { input: '$donate', initialValue: 0, in: { $add: ['$$value', '$$this.amount'] } } } }
+      }
+    },
+    { $sort: { totalDonated: -1 } },
+    { $limit: limit }
+  ];
+  
+  return await donations.aggregate(pipeline).toArray();
+}
+
+// Xóa donation records cũ (sau 15 giây)
+async function cleanupOldDonations() {
+  const { donations } = await getConnection();
+  const cutoffTime = new Date(Date.now() - 15 * 1000); // 15 giây trước
+  
+  const result = await donations.deleteMany({
+    createdAt: { $lt: cutoffTime }
+  });
+  
+  if (result.deletedCount > 0) {
+    console.log(`🧹 Đã xóa ${result.deletedCount} donation records cũ`);
+  }
+}
+
 module.exports = {
-  connectMongo,
   findOrCreateUser,
   addBalance,
   deductBalance,
@@ -154,5 +178,7 @@ module.exports = {
   addDonated,
   saveDonation,
   getUserDonations,
-  getUserTotalDonated
+  getUserTotalDonated,
+  getTopDonors,
+  cleanupOldDonations
 };

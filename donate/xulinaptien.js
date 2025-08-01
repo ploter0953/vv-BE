@@ -57,18 +57,13 @@ router.post('/', async (req, res) => {
       console.log('Extracted Discord ID:', discordId);
       
       if (!discordId) {
-        console.log('=== TEST DATA DETECTED - RETURNING SUCCESS ===');
+        console.log('=== ERROR: No Discord ID found in description ===');
         console.log('Description:', description);
-        console.log('Amount:', amount);
-        console.log('=== WEBHOOK TEST SUCCESSFUL ===');
-        return res.status(200).json({ 
-          success: true, 
-          message: 'Webhook test successful',
-          data: {
-            description,
-            amount,
-            timestamp: new Date().toISOString()
-          }
+        console.log('=== SUGGESTION: Add Discord ID to description ===');
+        console.log('Example: "giao dich thu nghiem 123456789012345678"');
+        return res.status(400).json({ 
+          error: 'Không tìm thấy Discord ID trong description',
+          suggestion: 'Thêm Discord ID vào description (ví dụ: "giao dich thu nghiem 123456789012345678")'
         });
       }
       
