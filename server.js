@@ -11,7 +11,10 @@ const userRoutes = require('./routes/userRoutes');
 const commissionRoutes = require('./routes/commissionRoutes');
 const orderRoutes = require('./routes/orderRoutes');
 const collabRoutes = require('./routes/collabRoutes');
+const donateRoutes = require('./routes/donateRoutes');
 const youtubeService = require('./services/youtubeService');
+const discordBotService = require('./services/discordBotService');
+const donationCleanupService = require('./services/donationCleanupService');
 const User = require('./models/User');
 const Commission = require('./models/Commission');
 const Order = require('./models/Order');
@@ -79,7 +82,11 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-producti
 const getAllowedOrigins = () => {
   // Only allow official domain
   const allowedOrigins = [
-    'https://www.projectvtuber.com'
+    'https://www.projectvtuber.com',
+    'https://donate.projectvtuber.com',
+    'http://donate.projectvtuber.com',
+    'http://localhost:5173', // Vite dev server
+    'http://localhost:3000'  // React dev server
   ];
   
   return allowedOrigins;
@@ -1918,6 +1925,23 @@ app.use('/api/orders', require('./routes/orderRoutes'));
 // Mount collabRoutes
 app.use('/api/collabs', require('./routes/collabRoutes'));
 
+// Mount donateRoutes
+app.use('/api/donate', require('./routes/donateRoutes'));
+
+// Mount Casso webhook route
+app.use('/api/casso-webhook', require('./donate/xulinaptien'));
+
+// Serve donate page
+app.use('/donate', express.static(path.join(__dirname, 'public/donate')));
+app.get('/donate', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public/donate/donate.html'));
+});
+
+// Serve user donation pages
+app.get('/donation/:userId', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public/donate/user-donation.html'));
+});
+
 // Global error handler
 app.use((err, req, res, next) => {
   console.error('Global error handler:', err);
@@ -2271,6 +2295,42 @@ const updateUserOnlineStatus = async () => {
 // Start user online status cron job
 setInterval(updateUserOnlineStatus, 60000); // Check every minute
 
+// Initialize Discord bot and donate functionality
+async function initializeDonateSystem() {
+  try {
+    // Initialize Discord bot
+    await discordBotService.initialize();
+    console.log('Discord bot initialized successfully');
+    
+    // Initialize donate routes with Socket.IO
+    donateRoutes.initializeDonateRoutes();
+    console.log('Donate system initialized successfully');
+  } catch (error) {
+    console.error('Error initializing donate system:', error);
+  }
+}
+
+
+
+// Initialize Discord bot and donate functionality
+async function initializeDonateSystem() {
+  try {
+    // Initialize Discord bot
+    await discordBotService.initialize();
+    console.log('Discord bot initialized successfully');
+    
+    // Initialize donate routes
+    donateRoutes.initializeDonateRoutes();
+    console.log('Donate system initialized successfully');
+    
+    // Start donation cleanup service
+    await donationCleanupService.start();
+    console.log('Donation cleanup service started');
+  } catch (error) {
+    console.error('Error initializing donate system:', error);
+  }
+}
+
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on port ${PORT}`);
@@ -2280,4 +2340,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`Collab status update task started (every 30 seconds - dynamic intervals based on time remaining)`);
   console.log(`Stream schedule reset task started (every Monday 00:00 Vietnam time)`);
   console.log(`User online status update task started (every minute - marks users offline after 5 minutes inactivity)`);
+  
+  // Initialize donate system after server starts
+  initializeDonateSystem();
 }); 

@@ -7,7 +7,8 @@
     "start": "node server.js",
     "dev": "nodemon server.js",
     "build": "echo 'No build step required for Node.js'",
-    "vercel-build": "echo 'Building for Vercel...'"
+    "vercel-build": "echo 'Building for Vercel...'",
+    "deploy-commands": "node deploy-commands.js"
   },
   "dependencies": {
     "axios": "^1.6.0",
@@ -24,7 +25,8 @@
     "pg-pool": "^3.6.1",
     "sqlite3": "^5.1.6",
     "@clerk/clerk-sdk-node": "^4.13.23",
-    "@clerk/express": "^1.7.6"
+    "@clerk/express": "^1.7.6",
+    "discord.js": "^14.19.3"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"

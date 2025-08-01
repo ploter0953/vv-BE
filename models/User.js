@@ -21,6 +21,12 @@ const userSchema = new mongoose.Schema({
   lastSeen: { type: Date, default: Date.now }, // Track online status
   isOnline: { type: Boolean, default: false }, // Real-time online status
   
+  // Donate fields
+  balance: { type: Number, default: 0 }, // Số dư từ nạp tiền
+  donated: { type: Number, default: 0 }, // Số tiền đã donate
+  discord_id: { type: String, default: '' }, // Discord ID của user
+  is_discord_verified: { type: Boolean, default: false }, // Trạng thái xác minh Discord
+  
   // Stream Schedule
   streamSchedule: [{
     dayOfWeek: { 

@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Donation Alert</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: transparent;
+      overflow: hidden;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    #donate-alert {
+      position: fixed;
+      top: 20%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.8);
+      padding: 32px 48px;
+      background: linear-gradient(135deg, rgba(0,0,0,0.7) 60%, #00ffd0 100%);
+      border-radius: 32px;
+      border: 3px solid #00ffd0;
+      box-shadow: 0 0 40px 10px #00ffd0, 0 0 0 8px rgba(0,255,208,0.1);
+      text-align: center;
+      color: #fff;
+      opacity: 0;
+      transition: opacity 0.5s cubic-bezier(.4,2,.6,1), transform 0.5s cubic-bezier(.4,2,.6,1);
+      z-index: 9999;
+      pointer-events: none;
+      min-width: 340px;
+      max-width: 90vw;
+    }
+    #donate-alert.show {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1.05);
+      animation: pop 0.7s cubic-bezier(.4,2,.6,1);
+    }
+    @keyframes pop {
+      0% { transform: translate(-50%, -50%) scale(0.7); }
+      60% { transform: translate(-50%, -50%) scale(1.15); }
+      100% { transform: translate(-50%, -50%) scale(1.05); }
+    }
+    .gif-container {
+      margin-bottom: 18px;
+    }
+    .gif-container img {
+      width: 110px;
+      height: 110px;
+      object-fit: contain;
+      border-radius: 50%;
+      border: 2px solid #fff;
+      box-shadow: 0 0 16px #00ffd0;
+    }
+    .line1 {
+      font-size: 2.1rem;
+      font-weight: bold;
+      text-shadow: 0 0 12px #00ffd0, 0 0 8px #000;
+      margin-bottom: 6px;
+    }
+    .donation-message {
+      color: #fff;
+      font-size: 1.25rem;
+      margin-top: 12px;
+      display: block;
+      white-space: pre-wrap;
+      text-shadow: 0 0 8px #00ffd0, 0 0 4px #000;
+      font-style: italic;
+    }
+    .badge {
+      display: inline-block;
+      background: linear-gradient(90deg, #ffb347, #ffcc33, #fff700);
+      color: #222;
+      font-weight: bold;
+      border-radius: 12px;
+      padding: 2px 12px;
+      margin-left: 8px;
+      font-size: 1rem;
+      box-shadow: 0 0 8px #fff700;
+      vertical-align: middle;
+    }
+    @media (max-width: 600px) {
+      #donate-alert {
+        padding: 16px 8vw;
+        min-width: 0;
+      }
+      .gif-container img {
+        width: 70px; height: 70px;
+      }
+      .line1 { font-size: 1.2rem; }
+      .donation-message { font-size: 1rem; }
+    }
+    .big-donation {
+      animation: bigdonate 1.2s cubic-bezier(.4,2,.6,1) infinite alternate;
+      box-shadow: 0 0 60px 20px #ff00cc, 0 0 0 12px rgba(255,0,204,0.15);
+    }
+    @keyframes bigdonate {
+      0% { filter: brightness(1.1) drop-shadow(0 0 0 #ff00cc); }
+      100% { filter: brightness(1.4) drop-shadow(0 0 32px #ff00cc); }
+    }
+  </style>
+</head>
+<body>
+  <div id="donate-alert">
+    <div class="gif-container">
+      <img src="./gif-img/dbb077da5bd62d731593fc927db9dbad.gif" alt="GIF" id="donate-avatar" />
+    </div>
+    <div class="line1"></div>
+    <span class="donation-message"></span>
+    <div id="donate-badge"></div>
+  </div>
+
+  <!-- Âm thanh ping -->
+  <audio id="ping-sound" src="https://example.com/ping.mp3" preload="auto"></audio>
+
+  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+  <script>
+    const alertBox = document.getElementById('donate-alert');
+    const line1 = alertBox.querySelector('.line1');
+    const messageBox = alertBox.querySelector('.donation-message');
+    const pingSound = document.getElementById('ping-sound');
+    const badgeBox = document.getElementById('donate-badge');
+    let timeout;
+    function getBadge(amount) {
+      if (amount >= 1000000) return '<span class="badge">💎 Kim cương</span>';
+      if (amount >= 500000) return '<span class="badge">🔥 Siêu to</span>';
+      if (amount >= 200000) return '<span class="badge">⭐ Đặc biệt</span>';
+      if (amount >= 100000) return '<span class="badge">🌟 Hào phóng</span>';
+      if (amount >= 50000) return '<span class="badge">✨ Ủng hộ</span>';
+      return '';
+    }
+    function showAlert({ name, amount, message, avatar }) {
+      const nameColor = '#fff';
+      line1.innerHTML = `<span style="color: ${nameColor}; font-weight:bold; text-shadow:0 0 8px #00ffd0">${name}</span> vừa donate <span style="color: #00ff99; font-size:1.3em; font-weight:bold;">${amount.toLocaleString()} VND</span>`;
+      messageBox.textContent = message || '';
+      badgeBox.innerHTML = getBadge(amount);
+      // Avatar động nếu có
+      const avatarImg = document.getElementById('donate-avatar');
+      if (avatar) avatarImg.src = avatar;
+      // Hiệu ứng big donation
+      if (amount >= 1000000) {
+        alertBox.classList.add('big-donation');
+      } else {
+        alertBox.classList.remove('big-donation');
+      }
+      alertBox.classList.add('show');
+      pingSound.currentTime = 0;
+      pingSound.play().catch(err => console.warn("Không thể phát âm thanh:", err));
+      clearTimeout(timeout);
+      timeout = setTimeout(() => {
+        alertBox.classList.remove('show');
+        alertBox.classList.remove('big-donation');
+      }, 7000);
+    }
+    const socket = io('/api/donate', {
+      path: '/api/donate/socket.io'
+    });
+    socket.on('new-donation', (donation) => {
+      if (donation && donation.name && donation.amount) {
+        showAlert(donation);
+      }
+    });
+  </script>
+</body>
+</html>
