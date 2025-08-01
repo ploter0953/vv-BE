@@ -180,7 +180,4 @@ function initializeDonateRoutes() {
   console.log('Donate routes initialized (polling mode)');
 }
 
-module.exports = {
-  router,
-  initializeDonateRoutes
-};
+module.exports = router;

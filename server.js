@@ -2302,30 +2302,11 @@ async function initializeDonateSystem() {
     await discordBotService.initialize();
     console.log('Discord bot initialized successfully');
     
-    // Initialize donate routes with Socket.IO
-    donateRoutes.initializeDonateRoutes();
-    console.log('Donate system initialized successfully');
-  } catch (error) {
-    console.error('Error initializing donate system:', error);
-  }
-}
-
-
-
-// Initialize Discord bot and donate functionality
-async function initializeDonateSystem() {
-  try {
-    // Initialize Discord bot
-    await discordBotService.initialize();
-    console.log('Discord bot initialized successfully');
-    
-    // Initialize donate routes
-    donateRoutes.initializeDonateRoutes();
-    console.log('Donate system initialized successfully');
-    
     // Start donation cleanup service
     await donationCleanupService.start();
     console.log('Donation cleanup service started');
+    
+    console.log('Donate system initialized successfully');
   } catch (error) {
     console.error('Error initializing donate system:', error);
   }
