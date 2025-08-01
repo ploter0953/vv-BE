@@ -179,8 +179,40 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // Webhook endpoint - completely bypass all middleware
-app.post('/webhook/casso', require('./donate/xulinaptien'));
+app.get('/webhook/test', (req, res) => {
+  console.log('=== WEBHOOK TEST ENDPOINT HIT ===');
+  console.log('Method:', req.method);
+  console.log('Path:', req.path);
+  console.log('Headers:', req.headers);
+  console.log('Timestamp:', new Date().toISOString());
+  
+  res.json({ 
+    message: 'Webhook endpoint is working!',
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.post('/webhook/casso', (req, res, next) => {
+  console.log('=== CASSO WEBHOOK RECEIVED ===');
+  console.log('Method:', req.method);
+  console.log('Path:', req.path);
+  console.log('Headers:', req.headers);
+  console.log('Body:', JSON.stringify(req.body, null, 2));
+  console.log('Timestamp:', new Date().toISOString());
+  console.log('IP:', req.ip);
+  console.log('User-Agent:', req.headers['user-agent']);
+  console.log('================================');
+  
+  next();
+}, require('./donate/xulinaptien'));
+
 app.get('/webhook/casso/test', (req, res) => {
+  console.log('=== CASSO WEBHOOK TEST ENDPOINT HIT ===');
+  console.log('Method:', req.method);
+  console.log('Path:', req.path);
+  console.log('Headers:', req.headers);
+  console.log('Timestamp:', new Date().toISOString());
+  
   res.json({ 
     message: 'Webhook endpoint is working!',
     timestamp: new Date().toISOString()
