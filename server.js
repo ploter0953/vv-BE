@@ -1104,6 +1104,8 @@ app.post('/api/upload/image', requireAuth(), upload.single('image'), async (req,
     size: req.file.size
   } : 'NO FILE');
   console.log('User:', req.auth?.userId);
+  console.log('Request body keys:', Object.keys(req.body || {}));
+  console.log('Upload type:', req.query.type);
   
   try {
     if (!req.file) {
@@ -1137,7 +1139,17 @@ app.post('/api/upload/image', requireAuth(), upload.single('image'), async (req,
       height: result.height
     });
   } catch (error) {
-    console.error('Upload error:', error);
+    console.error('=== UPLOAD IMAGE ERROR ===');
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('User ID:', req.auth?.userId);
+    console.error('File info:', req.file ? {
+      fieldname: req.file.fieldname,
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size
+    } : 'NO FILE');
+    console.error('Query type:', req.query.type);
     res.status(500).json({ error: 'Lỗi khi upload hình ảnh' });
   }
 });
@@ -1410,16 +1422,23 @@ app.delete('/api/upload/video/:public_id', requireAuth(), async (req, res) => {
 
 // Delete image from Cloudinary by URL
 app.delete('/api/upload/image-by-url', requireAuth(), async (req, res) => {
+  console.log('=== DELETE IMAGE BY URL ===');
+  console.log('Body:', req.body);
+  console.log('Image URL:', req.body.imageUrl);
+  
   try {
     const { imageUrl } = req.body;
     
     if (!imageUrl) {
+      console.log('Error: Image URL is missing');
       return res.status(400).json({ error: 'Image URL is required' });
     }
     
     const publicId = extractPublicIdFromCloudinaryUrl(imageUrl);
+    console.log('Extracted public ID:', publicId);
     
     if (!publicId) {
+      console.log('Error: Invalid Cloudinary URL');
       return res.status(400).json({ error: 'Invalid Cloudinary URL' });
     }
     
