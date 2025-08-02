@@ -29,13 +29,13 @@ router.post('/web', async (req, res) => {
     }
 
     // Validate amount
-    if (typeof amount !== 'number' || amount < 10000 || amount % 10000 !== 0) {
-      return res.status(400).json({ error: 'Số tiền phải từ 10,000 VNĐ và là bội số của 10,000 VNĐ' });
+    if (typeof amount !== 'number' || amount < 10000) {
+      return res.status(400).json({ error: 'Số tiền phải từ 10,000 VNĐ trở lên' });
     }
 
     // Validate message (optional)
-    if (message && (typeof message !== 'string' || message.length > 200)) {
-      return res.status(400).json({ error: 'Lời nhắn không hợp lệ (tối đa 200 ký tự)' });
+    if (message && (typeof message !== 'string' || message.length > 100)) {
+      return res.status(400).json({ error: 'Lời nhắn không hợp lệ (tối đa 100 ký tự)' });
     }
 
     const MONGO_URI = process.env.MONGODB_URI;
@@ -87,9 +87,9 @@ router.post('/web', async (req, res) => {
     }
     
     // Check amount validation
-    if (amount < 10000 || amount % 10000 !== 0) {
+    if (amount < 10000) {
       await client.close();
-      return res.status(400).json({ error: 'Số tiền phải lớn hơn 10,000 VNĐ và là bội số của 10,000 VNĐ' });
+      return res.status(400).json({ error: 'Số tiền phải từ 10,000 VNĐ trở lên' });
     }
     
     // Use transaction to ensure data consistency

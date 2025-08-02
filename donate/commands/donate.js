@@ -27,7 +27,7 @@ module.exports = {
         .setMaxLength(50))
     .addIntegerOption(option =>
       option.setName('amount')
-        .setDescription('Số tiền donate (bội số 10,000 VNĐ)')
+        .setDescription('Số tiền donate (từ 10,000 VNĐ trở lên)')
         .setRequired(true)
         .setMinValue(10000))
     .addStringOption(option =>
@@ -72,16 +72,16 @@ module.exports = {
         });
       }
 
-      if (message.length > 200) {
+      if (message.length > 100) {
         return interaction.reply({
-          content: '⚠️ Lời nhắn quá dài (tối đa 200 ký tự)',
+          content: '⚠️ Lời nhắn quá dài (tối đa 100 ký tự)',
           flags: MessageFlags.Ephemeral
         });
       }
 
-    if (amount < 10000 || amount % 10000 !== 0) {
+    if (amount < 10000) {
       return interaction.reply({
-        content: '⚠️ Số tiền phải lớn hơn 10,000 VNĐ và là bội số của 10,000 VNĐ!',
+        content: '⚠️ Số tiền phải từ 10,000 VNĐ trở lên!',
         flags: MessageFlags.Ephemeral
       });
     }
