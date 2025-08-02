@@ -152,6 +152,8 @@ router.put('/:id', requireAuth(), async (req, res) => {
     const { id } = req.params;
     const updateData = req.body;
     
+
+    
     // Validate user authentication
     const userId = req.auth?.userId || req.auth?.user?.id;
     if (!userId) {

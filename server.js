@@ -190,14 +190,6 @@ app.post('/webhook/casso', (req, res, next) => {
 
 // Apply origin validation middleware to all API routes except uploads
 app.use('/api', (req, res, next) => {
-  // Add logging for debugging
-  console.log(`[API REQUEST] ${req.method} ${req.path}`, {
-    origin: req.headers.origin,
-    referer: req.headers.referer,
-    userAgent: req.headers['user-agent']?.substring(0, 100),
-    fullUrl: req.originalUrl,
-    baseUrl: req.baseUrl
-  });
   
   // Skip origin validation for OPTIONS requests (preflight)
   if (req.method === 'OPTIONS') {
@@ -392,6 +384,9 @@ app.options('/api/users/*', cors(corsOptions)); // Add wildcard for user routes
 app.options('/api/auth/*', cors(corsOptions));
 app.options('/api/orders', cors(corsOptions));
 app.options('/api/upload/*', cors(corsOptions)); // Add CORS for upload endpoints
+app.options('/api/upload/image', cors(corsOptions)); // Add CORS for image upload
+app.options('/api/upload/images', cors(corsOptions)); // Add CORS for multiple images upload
+app.options('/api/upload/media', cors(corsOptions)); // Add CORS for media upload
 app.options('/api/vote/*', cors(corsOptions)); // Add CORS for vote endpoints
 
 // Kết nối MongoDB
@@ -1094,6 +1089,22 @@ app.put('/api/orders/auto-cancel-pending', async (req, res) => {
 
 // Upload image to Cloudinary
 app.post('/api/upload/image', requireAuth(), upload.single('image'), async (req, res) => {
+  console.log('=== IMAGE UPLOAD ENDPOINT HIT ===');
+  console.log('Headers:', {
+    origin: req.headers.origin,
+    referer: req.headers.referer,
+    'content-type': req.headers['content-type'],
+    authorization: req.headers.authorization ? 'Present' : 'Missing'
+  });
+  console.log('Query params:', req.query);
+  console.log('File:', req.file ? {
+    fieldname: req.file.fieldname,
+    originalname: req.file.originalname,
+    mimetype: req.file.mimetype,
+    size: req.file.size
+  } : 'NO FILE');
+  console.log('User:', req.auth?.userId);
+  
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'Không có file được upload' });
