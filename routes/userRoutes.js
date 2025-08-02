@@ -181,8 +181,10 @@ router.put('/:id', requireAuth(), async (req, res) => {
     
     // Define allowed fields that can be updated
     const allowedFields = [
-      'username', 'bio', 'avatar', 'socialLinks', 
-      'commissionRates', 'portfolio', 'badges'
+      'username', 'bio', 'avatar', 'banner', 'description', 'socialLinks', 
+      'commissionRates', 'portfolio', 'badges', 'facebook', 'website', 
+      'profile_email', 'vtuber_description', 'artist_description', 
+      'twitch', 'youtube', 'tiktok', 'discord', 'discord_id'
     ];
     
     // Filter out non-allowed fields
@@ -193,12 +195,20 @@ router.put('/:id', requireAuth(), async (req, res) => {
       }
     });
     
+    console.log('=== UPDATING USER PROFILE ===');
+    console.log('User ID:', user._id);
+    console.log('Original avatar:', user.avatar);
+    console.log('Update data:', updateData);
+    console.log('Filtered data:', filteredData);
+    
     // Update user
     const updatedUser = await User.findByIdAndUpdate(
       user._id,
       { ...filteredData, updatedAt: new Date() },
       { new: true, runValidators: true }
     );
+    
+    console.log('Updated user avatar:', updatedUser.avatar);
     
     res.json({ 
       message: 'Profile updated successfully',
