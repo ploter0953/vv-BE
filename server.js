@@ -1100,42 +1100,90 @@ app.put('/api/orders/auto-cancel-pending', async (req, res) => {
 
 // Upload image to Cloudinary
 app.post('/api/upload/image', requireAuth(), upload.single('image'), async (req, res) => {
+  console.log('=== AVATAR UPLOAD START ===');
+  console.log('Timestamp:', new Date().toISOString());
+  console.log('User ID:', req.auth?.userId);
+  console.log('Request path:', req.path);
+  console.log('Request method:', req.method);
+  console.log('Query params:', req.query);
+  console.log('Headers:', {
+    origin: req.headers.origin,
+    referer: req.headers.referer,
+    'content-type': req.headers['content-type'],
+    'content-length': req.headers['content-length'],
+    authorization: req.headers.authorization ? 'Present' : 'Missing'
+  });
+  console.log('File info:', req.file ? {
+    fieldname: req.file.fieldname,
+    originalname: req.file.originalname,
+    mimetype: req.file.mimetype,
+    size: req.file.size,
+    buffer: req.file.buffer ? `Buffer(${req.file.buffer.length} bytes)` : 'No buffer'
+  } : 'NO FILE RECEIVED');
+  console.log('Request body keys:', Object.keys(req.body || {}));
   
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'Không có file được upload' });
-    }
+      try {
+      console.log('=== PROCESSING UPLOAD ===');
+      
+      if (!req.file) {
+        console.log('ERROR: No file received');
+        return res.status(400).json({ error: 'Không có file được upload' });
+      }
 
-    // Convert buffer to base64
-    const b64 = Buffer.from(req.file.buffer).toString('base64');
-    const dataURI = `data:${req.file.mimetype};base64,${b64}`;
+      console.log('File validation passed');
+      console.log('File size:', req.file.size, 'bytes');
+      console.log('File type:', req.file.mimetype);
 
-    // Xác định folder theo query param type
-    let folder = 'vtuberverse/commission';
-    if (req.query.type === 'avatar' || req.query.type === 'banner') {
-      folder = 'vtuberverse/users';
-    }
+      // Convert buffer to base64
+      const b64 = Buffer.from(req.file.buffer).toString('base64');
+      const dataURI = `data:${req.file.mimetype};base64,${b64}`;
+      console.log('Base64 conversion completed, length:', b64.length);
 
-    // Upload to Cloudinary
-    const result = await cloudinary.uploader.upload(dataURI, {
-      folder,
-      resource_type: 'auto',
-      transformation: [
-        { quality: 'auto', fetch_format: 'auto' }
-      ]
-    });
+      // Xác định folder theo query param type
+      let folder = 'vtuberverse/commission';
+      if (req.query.type === 'avatar' || req.query.type === 'banner') {
+        folder = 'vtuberverse/users';
+      }
+      console.log('Upload folder:', folder);
+      console.log('Upload type:', req.query.type);
 
-    res.json({
-      success: true,
-      url: result.secure_url,
-      public_id: result.public_id,
-      width: result.width,
-      height: result.height
-    });
+      console.log('=== UPLOADING TO CLOUDINARY ===');
+      // Upload to Cloudinary
+      const result = await cloudinary.uploader.upload(dataURI, {
+        folder,
+        resource_type: 'auto',
+        transformation: [
+          { quality: 'auto', fetch_format: 'auto' }
+        ]
+      });
+
+      console.log('=== UPLOAD SUCCESS ===');
+      console.log('Cloudinary result:', {
+        url: result.secure_url,
+        public_id: result.public_id,
+        width: result.width,
+        height: result.height,
+        format: result.format,
+        resource_type: result.resource_type
+      });
+
+      res.json({
+        success: true,
+        url: result.secure_url,
+        public_id: result.public_id,
+        width: result.width,
+        height: result.height
+      });
   } catch (error) {
-    console.error('Upload error:', error);
+    console.log('=== UPLOAD ERROR ===');
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('Error name:', error.name);
+    console.error('Error code:', error.code);
+    console.error('Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
     res.status(500).json({ error: 'Lỗi khi upload hình ảnh' });
   }
+  console.log('=== AVATAR UPLOAD END ===');
 });
 
 // Upload multiple images to Cloudinary
