@@ -734,7 +734,6 @@ router.post('/:id/request-match', requireAuth(), async (req, res) => {
         const updatedCollab = await Collab.findById(collab._id);
         creatorScheduledTime = updatedCollab.stream_info_1?.scheduledStartTime;
       }
-      }
     }
     
     if (!creatorScheduledTime || !partnerScheduledTime) {
