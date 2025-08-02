@@ -170,6 +170,17 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
+// Error handling for CORS
+app.use((err, req, res, next) => {
+  if (err.message === 'Truy cập không được phép từ domain này') {
+    return res.status(403).json({
+      error: 'CORS Error',
+      message: 'Truy cập không được phép từ domain này'
+    });
+  }
+  next(err);
+});
+
 
 
 app.post('/webhook/casso', (req, res, next) => {
