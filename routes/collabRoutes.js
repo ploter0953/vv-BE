@@ -11,25 +11,19 @@ const router = express.Router();
 // Helper function to update stream_info_1 for existing collabs
 async function updateStreamInfoForCollab(collabId) {
   try {
-    console.log('[updateStreamInfoForCollab] Starting update for collab:', collabId);
     const collab = await Collab.findById(collabId);
     if (!collab || !collab.youtube_link_1) {
-      console.log('[updateStreamInfoForCollab] No collab or no youtube_link_1');
       return false;
     }
     
     const videoId = youtubeService.extractVideoId(collab.youtube_link_1);
     if (!videoId) {
-      console.log('[updateStreamInfoForCollab] Could not extract video ID from:', collab.youtube_link_1);
       return false;
     }
     
-    console.log('[updateStreamInfoForCollab] Checking stream status for videoId:', videoId);
     const streamStatus = await youtubeService.checkStreamStatus(videoId, 5 * 60 * 1000);
-    console.log('[updateStreamInfoForCollab] Stream status:', streamStatus);
     
     if (!streamStatus.isValid) {
-      console.log('[updateStreamInfoForCollab] Stream status not valid');
       return false;
     }
     
@@ -64,9 +58,7 @@ async function updateStreamInfoForCollab(collabId) {
       }
     }
     
-    console.log('[updateStreamInfoForCollab] Updating with data:', updateData);
     await Collab.findByIdAndUpdate(collabId, updateData);
-    console.log('[updateStreamInfoForCollab] Update successful');
     
     return true;
   } catch (error) {
@@ -496,14 +488,7 @@ router.post('/', requireAuth(), createCollabLimiter, async (req, res) => {
     
     await collab.save();
     
-    // Log successful collab creation
-    console.log('=== COLLAB CREATED ===');
-    console.log('Creator:', user.username);
-    console.log('Title:', title);
-    console.log('Type:', type);
-    console.log('Max Partners:', maxPartners);
-    console.log('YouTube Link:', youtubeLink);
-    console.log('Timestamp:', new Date().toISOString());
+
     
     // Populate user info for response
     await collab.populate('creator', 'username avatar');
@@ -676,80 +661,61 @@ router.post('/:id/request-match', requireAuth(), async (req, res) => {
     }
     
     const collab = await Collab.findById(collabId);
-    console.log('[request-match] collab found:', !!collab);
-    console.log('[request-match] collab data:', collab);
-    
     if (!collab) {
-      console.log('[request-match] ERROR: Collab not found');
       return res.status(404).json({ error: 'Collab không tồn tại' });
     }
     
     if (collab.partner_waiting_for_confirm.length >= 10) {
-      console.log('[request-match] ERROR: Waiting list full');
       return res.status(400).json({ error: 'Danh sách yêu cầu đã đầy, bạn khám phá các phiên collab khác bên dưới nhé!' });
     }
     
     // Không cho gửi trùng user
     const userId = req.auth?.userId || req.auth?.user?.id;
-    console.log('[request-match] userId:', userId);
     
     let user = await User.findOne({ clerkId: userId });
     if (!user && mongoose.Types.ObjectId.isValid(userId)) {
       user = await User.findById(userId);
     }
     
-    console.log('[request-match] user found:', !!user);
     if (!user) {
-      console.log('[request-match] ERROR: User not found');
       return res.status(404).json({ error: 'User không tồn tại' });
     }
     
     // Check if user already sent request
     const alreadyRequested = collab.partner_waiting_for_confirm.some(w => w.user.toString() === user._id.toString());
-    console.log('[request-match] already requested:', alreadyRequested);
     
     if (alreadyRequested) {
-      console.log('[request-match] ERROR: User already requested');
       return res.status(400).json({ error: 'Bạn đã gửi yêu cầu rồi, vui lòng chờ chủ collab xác nhận!' });
     }
     
     // Check if user is already a partner
     const isAlreadyPartner = [collab.partner_1, collab.partner_2, collab.partner_3].some(p => p && p.toString() === user._id.toString());
-    console.log('[request-match] is already partner:', isAlreadyPartner);
     
     if (isAlreadyPartner) {
-      console.log('[request-match] ERROR: User is already partner');
       return res.status(400).json({ error: 'Bạn đã là partner của collab này!' });
     }
     
     // Kiểm tra link YouTube của partner
-    console.log('[request-match] Validating YouTube URL:', youtubeLink);
     if (!youtubeService.validateYouTubeUrl(youtubeLink)) {
-      console.log('[request-match] ERROR: Invalid YouTube URL');
       return res.status(400).json({ error: 'Link YouTube không hợp lệ' });
     }
     
     // Check stream status của partner
     const partnerVideoId = youtubeService.extractVideoId(youtubeLink);
-    console.log('[request-match] partnerVideoId:', partnerVideoId);
     
     if (!partnerVideoId) {
-      console.log('[request-match] ERROR: Could not extract video ID');
       return res.status(400).json({ error: 'Không thể trích xuất video ID từ link YouTube' });
     }
     
     const partnerStreamStatus = await youtubeService.checkStreamStatus(partnerVideoId, 5 * 60 * 1000);
-    console.log('[request-match] partnerStreamStatus:', partnerStreamStatus);
     
     if (!partnerStreamStatus.isValid) {
-      console.log('[request-match] ERROR: Partner stream not valid');
       return res.status(400).json({ 
         error: 'Link YouTube của bạn không hợp lệ hoặc stream đã bắt đầu' 
       });
     }
     
     if (!partnerStreamStatus.isWaitingRoom) {
-      console.log('[request-match] ERROR: Partner stream not in waiting room');
       return res.status(400).json({ 
         error: 'Link YouTube của bạn phải là phòng chờ (waiting room)' 
       });
@@ -759,24 +725,15 @@ router.post('/:id/request-match', requireAuth(), async (req, res) => {
     let creatorScheduledTime = collab.stream_info_1?.scheduledStartTime;
     const partnerScheduledTime = partnerStreamStatus.scheduledStartTime;
     
-    console.log('[request-match] creatorScheduledTime:', creatorScheduledTime);
-    console.log('[request-match] partnerScheduledTime:', partnerScheduledTime);
-    console.log('[request-match] collab.stream_info_1:', collab.stream_info_1);
-    
     // Nếu creatorScheduledTime không có, thử update stream_info_1
     if (!creatorScheduledTime && collab.youtube_link_1) {
-      console.log('[request-match] Attempting to update stream_info_1 for collab');
       const updated = await updateStreamInfoForCollab(collab._id);
-      console.log('[request-match] updateStreamInfoForCollab result:', updated);
       
       if (updated) {
         // Reload collab data
         const updatedCollab = await Collab.findById(collab._id);
-        console.log('[request-match] Updated collab data:', updatedCollab.stream_info_1);
         creatorScheduledTime = updatedCollab.stream_info_1?.scheduledStartTime;
-        console.log('[request-match] Updated creatorScheduledTime:', creatorScheduledTime);
-      } else {
-        console.log('[request-match] Failed to update stream_info_1');
+      }
       }
     }
     

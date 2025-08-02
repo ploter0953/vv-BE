@@ -490,6 +490,8 @@ app.post('/api/users/fix-usernames', async (req, res) => {
   }
 });
 
+
+
 // Clerk sync endpoint from userRoutes.js
 app.post('/api/users/clerk-sync', requireAuth(), async (req, res) => {
   try {
@@ -1964,13 +1966,11 @@ let isUpdating = false; // Prevent concurrent updates
 
 const updateCollabStatuses = async () => {
   if (isUpdating) {
-    console.log('=== Skipping update - previous update still running ===');
     return;
   }
 
   try {
     isUpdating = true;
-    console.log('=== Updating collab statuses ===');
     
     const now = new Date();
     
@@ -2010,10 +2010,8 @@ const updateCollabStatuses = async () => {
       
       return timeSinceLastCheck >= checkInterval;
     });
-    console.log(`Found ${collabsToUpdate.length} collabs to update out of ${allCollabs.length} total collabs`);
     
     if (collabsToUpdate.length === 0) {
-      console.log('No collabs need updating');
       return;
     }
     
@@ -2164,7 +2162,6 @@ const updateCollabStatuses = async () => {
     });
     
     if (endedCollabs.length > 0) {
-      console.log(`Cleaning up ${endedCollabs.length} ended collabs`);
       await Collab.deleteMany({
         status: 'ended',
         endedAt: { $lt: oneHourAgo }
@@ -2247,7 +2244,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`API available at http://localhost:${PORT}/api`);
   console.log(`Server accessible from other machines on the network`);
   console.log(`CORS Enabled with security restrictions`);
-  console.log(`Collab status update task started (every 30 seconds - dynamic intervals based on time remaining)`);
+
   console.log(`Stream schedule reset task started (every Monday 00:00 Vietnam time)`);
   
   // Initialize donate system after server starts

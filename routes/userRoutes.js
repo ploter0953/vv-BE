@@ -70,20 +70,38 @@ router.post('/sync-clerk', async (req, res) => {
     let user = await User.findOne({ clerkId });
     
     if (user) {
-      // Update existing user
-      user.email = email || user.email;
-      user.username = username || user.username;
-      user.avatar = avatar || user.avatar;
+      // Update existing user with Clerk data
+      const updateData = {
+        email: email || user.email,
+        username: username || user.username
+      };
+      
+      // Only update avatar if user doesn't have a custom avatar
+      const hasCustomAvatar = user.avatar && !user.avatar.includes('clerk.com');
+      const isClerkDefaultAvatar = user.avatar && user.avatar.includes('clerk.com');
+      
+      if (avatar && (!hasCustomAvatar || isClerkDefaultAvatar)) {
+        updateData.avatar = avatar;
+      }
+      
+      // Update user
+      Object.assign(user, updateData);
       await user.save();
     } else {
       // Create new user
-      user = new User({
+      const userData = {
         clerkId,
         email,
         username,
-        avatar,
         badges: ['member']
-      });
+      };
+      
+      // Set avatar only if provided
+      if (avatar) {
+        userData.avatar = avatar;
+      }
+      
+      user = new User(userData);
       await user.save();
     }
     
@@ -162,15 +180,19 @@ router.put('/:id', requireAuth(), async (req, res) => {
     
     // Find user by ID or Clerk ID
     let user;
+    console.log('Looking for user with ID:', id);
     if (id.startsWith('user_')) {
       user = await User.findOne({ clerkId: id });
+      console.log('Found user by clerkId:', user ? user._id : 'Not found');
     } else if (mongoose.Types.ObjectId.isValid(id)) {
       user = await User.findById(id);
+      console.log('Found user by ObjectId:', user ? user._id : 'Not found');
     } else {
       return res.status(400).json({ message: 'Invalid user id' });
     }
     
     if (!user) {
+      console.log('User not found for ID:', id);
       return res.status(404).json({ message: 'User not found' });
     }
     
