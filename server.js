@@ -194,7 +194,9 @@ app.use('/api', (req, res, next) => {
   console.log(`[API REQUEST] ${req.method} ${req.path}`, {
     origin: req.headers.origin,
     referer: req.headers.referer,
-    userAgent: req.headers['user-agent']?.substring(0, 100)
+    userAgent: req.headers['user-agent']?.substring(0, 100),
+    fullUrl: req.originalUrl,
+    baseUrl: req.baseUrl
   });
   
   // Skip origin validation for OPTIONS requests (preflight)
@@ -389,6 +391,8 @@ app.options('/api/users', cors(corsOptions));
 app.options('/api/users/*', cors(corsOptions)); // Add wildcard for user routes
 app.options('/api/auth/*', cors(corsOptions));
 app.options('/api/orders', cors(corsOptions));
+app.options('/api/upload/*', cors(corsOptions)); // Add CORS for upload endpoints
+app.options('/api/vote/*', cors(corsOptions)); // Add CORS for vote endpoints
 
 // Kết nối MongoDB
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/vtuberverse';
