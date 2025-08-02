@@ -146,6 +146,68 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// Update user profile
+router.put('/:id', requireAuth(), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+    
+    // Validate user authentication
+    const userId = req.auth?.userId || req.auth?.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: 'User not authenticated' });
+    }
+    
+    // Find user by ID or Clerk ID
+    let user;
+    if (id.startsWith('user_')) {
+      user = await User.findOne({ clerkId: id });
+    } else if (mongoose.Types.ObjectId.isValid(id)) {
+      user = await User.findById(id);
+    } else {
+      return res.status(400).json({ message: 'Invalid user id' });
+    }
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Check if user is updating their own profile
+    if (user.clerkId !== userId && String(user._id) !== userId) {
+      return res.status(403).json({ message: 'Unauthorized to update this profile' });
+    }
+    
+    // Define allowed fields that can be updated
+    const allowedFields = [
+      'username', 'bio', 'avatar', 'socialLinks', 
+      'commissionRates', 'portfolio', 'badges'
+    ];
+    
+    // Filter out non-allowed fields
+    const filteredData = {};
+    Object.keys(updateData).forEach(key => {
+      if (allowedFields.includes(key)) {
+        filteredData[key] = updateData[key];
+      }
+    });
+    
+    // Update user
+    const updatedUser = await User.findByIdAndUpdate(
+      user._id,
+      { ...filteredData, updatedAt: new Date() },
+      { new: true, runValidators: true }
+    );
+    
+    res.json({ 
+      message: 'Profile updated successfully',
+      user: updatedUser 
+    });
+  } catch (error) {
+    console.error('Error updating user profile:', error);
+    res.status(500).json({ message: 'Error updating profile' });
+  }
+});
+
 // Xóa user
 router.delete('/:id', async (req, res) => {
   try {
@@ -158,111 +220,7 @@ router.delete('/:id', async (req, res) => {
 
 
 
-// Update user online status
-router.post('/online', requireAuth(), async (req, res) => {
-  try {
-    // Check MongoDB connection
-    if (mongoose.connection.readyState !== 1) {
-      return res.status(500).json({ message: 'Database connection error' });
-    }
 
-    // Get user ID from Clerk auth or fallback
-    const userId = req.auth?.userId || req.auth?.user?.id;
-    
-    if (!userId) {
-      return res.status(401).json({ message: 'User not authenticated' });
-    }
-
-    // Try to find user by Clerk ID first, then by MongoDB ID
-    let user = await User.findOne({ clerkId: userId });
-    if (!user) {
-      user = await User.findById(userId);
-    }
-    
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    await User.findByIdAndUpdate(user._id, {
-      isOnline: true,
-      lastSeen: new Date()
-    });
-    
-    res.json({ message: 'Online status updated' });
-  } catch (error) {
-    res.status(500).json({ message: 'Error updating online status' });
-  }
-});
-
-// Update user offline status
-router.post('/offline', requireAuth(), async (req, res) => {
-  try {
-    // Check MongoDB connection
-    if (mongoose.connection.readyState !== 1) {
-      return res.status(500).json({ message: 'Database connection error' });
-    }
-
-    // Get user ID from Clerk auth or fallback
-    const userId = req.auth?.userId || req.auth?.user?.id;
-    
-    if (!userId) {
-      return res.status(401).json({ message: 'User not authenticated' });
-    }
-
-    // Try to find user by Clerk ID first, then by MongoDB ID
-    let user = await User.findOne({ clerkId: userId });
-    if (!user) {
-      user = await User.findById(userId);
-    }
-    
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    await User.findByIdAndUpdate(user._id, {
-      isOnline: false,
-      lastSeen: new Date()
-    });
-    
-    res.json({ message: 'Offline status updated' });
-  } catch (error) {
-    res.status(500).json({ message: 'Error updating offline status' });
-  }
-});
-
-
-// Get user online status
-router.get('/:id/status', async (req, res) => {
-  try {
-    // Check MongoDB connection
-    if (mongoose.connection.readyState !== 1) {
-      return res.status(500).json({ message: 'Database connection error' });
-    }
-
-    // Validate ObjectId format
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-      return res.status(400).json({ message: 'Invalid user ID format' });
-    }
-
-    const user = await User.findById(req.params.id).select('isOnline lastSeen');
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-    
-    // Calculate if user is considered online (within last 3 minutes for better responsiveness)
-    const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000);
-    const lastSeenDate = user.lastSeen ? new Date(user.lastSeen) : new Date(0);
-    const isRecentlyActive = lastSeenDate > threeMinutesAgo;
-    
-    res.json({
-      isOnline: Boolean(user.isOnline) && isRecentlyActive,
-      lastSeen: user.lastSeen || null,
-      isRecentlyActive: Boolean(isRecentlyActive)
-    });
-  } catch (error) {
-    res.status(500).json({ message: 'Error getting user status' });
-  }
-});
 
 // ==================== STREAM SCHEDULE ENDPOINTS ====================
 

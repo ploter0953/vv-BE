@@ -190,6 +190,18 @@ app.post('/webhook/casso', (req, res, next) => {
 
 // Apply origin validation middleware to all API routes except uploads
 app.use('/api', (req, res, next) => {
+  // Add logging for debugging
+  console.log(`[API REQUEST] ${req.method} ${req.path}`, {
+    origin: req.headers.origin,
+    referer: req.headers.referer,
+    userAgent: req.headers['user-agent']?.substring(0, 100)
+  });
+  
+  // Skip origin validation for OPTIONS requests (preflight)
+  if (req.method === 'OPTIONS') {
+    return next();
+  }
+  
   // For upload endpoints, apply selective no-origin validation
   if (req.path.startsWith('/upload/')) {
     const origin = req.headers.origin;
@@ -301,12 +313,20 @@ app.use('/api', (req, res, next) => {
   }
   
   // Check if referer is from allowed domain
-  const refererUrl = new URL(referer);
-  const refererOrigin = refererUrl.origin;
-  
-  if (!allowedOrigins.includes(refererOrigin)) {
+  try {
+    const refererUrl = new URL(referer);
+    const refererOrigin = refererUrl.origin;
+    
+    if (!allowedOrigins.includes(refererOrigin)) {
+      return res.status(403).json({
+        error: 'Truy cập không được phép từ domain này',
+        message: 'Vui lòng truy cập từ domain chính thức: https://www.projectvtuber.com'
+      });
+    }
+  } catch (error) {
+    // Invalid referer URL, block the request
     return res.status(403).json({
-      error: 'Truy cập không được phép từ domain này',
+      error: 'Referer không hợp lệ',
       message: 'Vui lòng truy cập từ domain chính thức: https://www.projectvtuber.com'
     });
   }
@@ -334,8 +354,6 @@ app.use('/api', (req, res, next) => {
     'curl',
     'wget',
     'python-requests',
-    'axios',
-    'fetch',
     'httpie',
     'thunder client',
     'rest client'
@@ -368,6 +386,7 @@ app.options('*', cors(corsOptions));
 // Specific OPTIONS routes for main endpoints
 app.options('/api/commissions', cors(corsOptions));
 app.options('/api/users', cors(corsOptions));
+app.options('/api/users/*', cors(corsOptions)); // Add wildcard for user routes
 app.options('/api/auth/*', cors(corsOptions));
 app.options('/api/orders', cors(corsOptions));
 
@@ -2184,43 +2203,7 @@ const resetStreamSchedules = async () => {
 // Start stream schedule cron jobs
 setInterval(resetStreamSchedules, 60000); // Check every minute for Monday reset
 
-// ==================== USER ONLINE STATUS CRON JOBS ====================
 
-// Mark users as offline after 5 minutes of inactivity
-const updateUserOnlineStatus = async () => {
-  try {
-    console.log('Running user online status update task...');
-    
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-    
-    // Find users who are marked as online but haven't been seen in 5 minutes
-    const inactiveUsers = await User.find({
-      isOnline: true,
-      lastSeen: { $lt: fiveMinutesAgo }
-    });
-    
-    if (inactiveUsers.length > 0) {
-      console.log(`Marking ${inactiveUsers.length} users as offline due to inactivity`);
-      
-      // Mark them as offline
-      await User.updateMany(
-        {
-          isOnline: true,
-          lastSeen: { $lt: fiveMinutesAgo }
-        },
-        {
-          isOnline: false,
-          lastSeen: new Date()
-        }
-      );
-    }
-  } catch (error) {
-    console.error('Error in user online status update task:', error);
-  }
-};
-
-// Start user online status cron job
-setInterval(updateUserOnlineStatus, 60000); // Check every minute
 
 // Initialize Discord bot and donate functionality
 async function initializeDonateSystem() {
@@ -2255,7 +2238,6 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`CORS Enabled with security restrictions`);
   console.log(`Collab status update task started (every 30 seconds - dynamic intervals based on time remaining)`);
   console.log(`Stream schedule reset task started (every Monday 00:00 Vietnam time)`);
-  console.log(`User online status update task started (every minute - marks users offline after 5 minutes inactivity)`);
   
   // Initialize donate system after server starts
   initializeDonateSystem();

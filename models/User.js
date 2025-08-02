@@ -19,8 +19,6 @@ const userSchema = new mongoose.Schema({
   youtube: String,
   tiktok: String,
   discord: String, // Discord username (sau khi verify)
-  lastSeen: { type: Date, default: Date.now }, // Track online status
-  isOnline: { type: Boolean, default: false }, // Real-time online status
   
   // Donate fields
   balance: { type: Number, default: 0 }, // Số dư từ nạp tiền
