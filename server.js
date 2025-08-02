@@ -433,26 +433,39 @@ fixProfileEmailIndex();
 
 // Helper function to extract public_id from Cloudinary URL
 function extractPublicIdFromCloudinaryUrl(url) {
+  console.log('=== EXTRACTING PUBLIC ID ===');
+  console.log('Input URL:', url);
+  
   if (!url || !url.includes('cloudinary.com')) {
+    console.log('ERROR: URL is null or does not contain cloudinary.com');
     return null;
   }
   
   try {
     // Cloudinary URL format: https://res.cloudinary.com/cloud_name/image/upload/v1234567890/folder/filename.jpg
     const urlParts = url.split('/');
+    console.log('URL parts:', urlParts);
+    
     const uploadIndex = urlParts.findIndex(part => part === 'upload');
+    console.log('Upload index:', uploadIndex);
     
     if (uploadIndex !== -1 && uploadIndex + 2 < urlParts.length) {
       // Get the part after 'upload' and version
       const publicIdParts = urlParts.slice(uploadIndex + 2);
+      console.log('Public ID parts:', publicIdParts);
+      
       // Remove file extension
       const publicId = publicIdParts.join('/').split('.')[0];
+      console.log('Extracted public ID:', publicId);
       return publicId;
+    } else {
+      console.log('ERROR: Invalid URL structure - upload not found or insufficient parts');
     }
   } catch (error) {
     console.log('Error extracting public_id from URL:', error.message);
   }
   
+  console.log('ERROR: Failed to extract public ID');
   return null;
 }
 
@@ -1454,31 +1467,58 @@ app.delete('/api/upload/video/:public_id', requireAuth(), async (req, res) => {
 
 // Delete image from Cloudinary by URL
 app.delete('/api/upload/image-by-url', requireAuth(), async (req, res) => {
+  console.log('=== DELETE IMAGE BY URL START ===');
+  console.log('Timestamp:', new Date().toISOString());
+  console.log('User ID:', req.auth?.userId);
+  console.log('Request path:', req.path);
+  console.log('Request method:', req.method);
+  console.log('Headers:', {
+    origin: req.headers.origin,
+    referer: req.headers.referer,
+    'content-type': req.headers['content-type'],
+    authorization: req.headers.authorization ? 'Present' : 'Missing'
+  });
+  console.log('Request body:', req.body);
+  console.log('Image URL from body:', req.body?.imageUrl);
   
   try {
     const { imageUrl } = req.body;
     
     if (!imageUrl) {
+      console.log('ERROR: Image URL is missing');
       return res.status(400).json({ error: 'Image URL is required' });
     }
     
+    console.log('Extracting public ID from URL:', imageUrl);
     const publicId = extractPublicIdFromCloudinaryUrl(imageUrl);
+    console.log('Extracted public ID:', publicId);
     
     if (!publicId) {
+      console.log('ERROR: Invalid Cloudinary URL - could not extract public ID');
       return res.status(400).json({ error: 'Invalid Cloudinary URL' });
     }
     
+    console.log('Attempting to delete from Cloudinary with public ID:', publicId);
     const result = await cloudinary.uploader.destroy(publicId);
+    console.log('Cloudinary delete result:', result);
     
     if (result.result === 'ok') {
+      console.log('=== DELETE SUCCESS ===');
       res.json({ success: true, message: 'Xóa hình ảnh thành công', publicId });
     } else {
+      console.log('=== DELETE FAILED ===');
+      console.log('Cloudinary error:', result);
       res.status(400).json({ error: 'Không thể xóa hình ảnh' });
     }
   } catch (error) {
-    console.error('Delete image by URL error:', error);
+    console.log('=== DELETE ERROR ===');
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('Error name:', error.name);
+    console.error('Error code:', error.code);
     res.status(500).json({ error: 'Lỗi khi xóa hình ảnh' });
   }
+  console.log('=== DELETE IMAGE BY URL END ===');
 });
 
 // Delete video from Cloudinary by URL
