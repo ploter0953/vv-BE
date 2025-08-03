@@ -218,6 +218,7 @@ async function updateCollabStatus(collabId) {
               
               if (streamStatus.isValid && streamStatus.isLive) {
                 hasLiveStream = true;
+                hasWaitingRoom = false; // Ưu tiên live hơn waiting room
                 allStreamsEnded = false;
               } else if (streamStatus.isValid && streamStatus.isWaitingRoom) {
                 hasWaitingRoom = true;
@@ -227,6 +228,10 @@ async function updateCollabStatus(collabId) {
                 totalViews += streamStatus.viewCount || 0;
                 totalLikes += streamStatus.likeCount || 0;
                 totalComments += streamStatus.commentCount || 0;
+                // allStreamsEnded vẫn true (mặc định)
+              } else {
+                // Stream không hợp lệ hoặc lỗi - coi như đã kết thúc
+                allStreamsEnded = true;
               }
             }
           } catch (error) {
@@ -241,8 +246,7 @@ async function updateCollabStatus(collabId) {
         await Collab.findByIdAndUpdate(collabId, updateData);
       }
       
-      // Debug log để kiểm tra giá trị
-      console.log(`[DEBUG] Collab ${collabId}: hasLiveStream=${hasLiveStream}, hasWaitingRoom=${hasWaitingRoom}, currentPartners=${currentPartners}, status=${collab.status}`);
+
     }
 
     // 1. Nếu không có partner nào và stream đã bắt đầu hoặc kết thúc -> cancelled
@@ -270,7 +274,6 @@ async function updateCollabStatus(collabId) {
 
     // 3. Nếu stream đang live và có ít nhất 1 partner -> in_progress (ưu tiên cao nhất)
     if (hasLiveStream && currentPartners >= 1) {
-      console.log(`[STATUS UPDATE] Collab ${collabId}: hasLiveStream=${hasLiveStream}, currentPartners=${currentPartners} -> in_progress`);
       await Collab.findByIdAndUpdate(collabId, {
         status: 'in_progress',
         startedAt: collab.startedAt || new Date(),
@@ -281,7 +284,6 @@ async function updateCollabStatus(collabId) {
     
     // 4.5. Nếu đang setting_up và stream đã live -> in_progress
     if (collab.status === 'setting_up' && hasLiveStream && currentPartners >= 1) {
-      console.log(`[STATUS UPDATE] Collab ${collabId}: setting_up -> in_progress (hasLiveStream=${hasLiveStream}, currentPartners=${currentPartners})`);
       await Collab.findByIdAndUpdate(collabId, {
         status: 'in_progress',
         startedAt: collab.startedAt || new Date(),

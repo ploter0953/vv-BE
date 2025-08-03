@@ -67,6 +67,9 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
+// Trust proxy for rate limiting behind load balancer/proxy
+app.set('trust proxy', 1);
+
 // Middleware xác thực Clerk
 // const clerkMiddleware = clerkExpressWithAuth({ secretKey: process.env.CLERK_SECRET_KEY });
 
@@ -2214,12 +2217,18 @@ const updateCollabStatuses = async () => {
     
     // Clean up ended collabs after 1 hour
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    
+    // Debug: Check all ended collabs
+    const allEndedCollabs = await Collab.find({ status: 'ended' });
+    console.log(`[CLEANUP] Found ${allEndedCollabs.length} total ended collabs`);
+    
     const endedCollabs = await Collab.find({
       status: 'ended',
       endedAt: { $lt: oneHourAgo }
     });
     
     if (endedCollabs.length > 0) {
+      console.log(`[CLEANUP] Deleting ${endedCollabs.length} ended collabs older than 1 hour`);
       await Collab.deleteMany({
         status: 'ended',
         endedAt: { $lt: oneHourAgo }
