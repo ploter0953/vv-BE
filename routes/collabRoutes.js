@@ -403,8 +403,9 @@ router.post('/', requireAuth(), createCollabLimiter, async (req, res) => {
       });
     }
     
+    let streamStatus;
     try {
-      const streamStatus = await youtubeService.checkStreamStatus(videoId, 5 * 60 * 1000); // 5 min cache for validation
+      streamStatus = await youtubeService.checkStreamStatus(videoId, 5 * 60 * 1000); // 5 min cache for validation
       
       if (!streamStatus.isValid) {
         return res.status(400).json({ 

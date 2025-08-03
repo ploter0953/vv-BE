@@ -180,22 +180,7 @@ router.put('/:id', requireAuth(), async (req, res) => {
       }
     });
     
-    console.log('=== UPDATING USER PROFILE ===');
-    console.log('User ID:', user._id);
-    console.log('Original avatar:', user.avatar);
-    console.log('Original banner:', user.banner);
-    console.log('Update data:', updateData);
-    console.log('Filtered data:', filteredData);
-    console.log('Avatar change:', user.avatar !== filteredData.avatar ? 'YES' : 'NO');
-    console.log('Banner change:', user.banner !== filteredData.banner ? 'YES' : 'NO');
-    console.log('New avatar is Clerk default:', filteredData.avatar?.includes('clerk.com') ? 'YES' : 'NO');
-    console.log('New banner is empty:', filteredData.banner === '' ? 'YES' : 'NO');
-    console.log('Banner deletion condition:', {
-      hasBanner: !!user.banner,
-      isCloudinaryBanner: user.banner?.includes('cloudinary.com'),
-      bannerChanged: user.banner !== filteredData.banner,
-      newBannerEmpty: filteredData.banner === ''
-    });
+
     
     // Check if avatar is being updated and delete old avatar from Cloudinary
     // Handle both cases: new avatar upload and avatar deletion (set to Clerk default)
@@ -203,7 +188,7 @@ router.put('/:id', requireAuth(), async (req, res) => {
         filteredData.avatar !== user.avatar && 
         !filteredData.avatar.includes('clerk.com')) {
       try {
-        console.log('[UPDATE PROFILE] Deleting old avatar:', user.avatar);
+
         const cloudinary = require('cloudinary').v2;
         
         // Extract public ID from old avatar URL
@@ -225,7 +210,6 @@ router.put('/:id', requireAuth(), async (req, res) => {
         const publicId = extractPublicIdFromCloudinaryUrl(user.avatar);
         if (publicId) {
           const result = await cloudinary.uploader.destroy(publicId);
-          console.log('[UPDATE PROFILE] Old avatar deletion result:', result);
         }
       } catch (error) {
         console.error('[UPDATE PROFILE] Error deleting old avatar:', error);
@@ -239,7 +223,7 @@ router.put('/:id', requireAuth(), async (req, res) => {
         filteredData.banner !== user.banner && 
         filteredData.banner === '') {
       try {
-        console.log('[UPDATE PROFILE] Deleting old banner:', user.banner);
+
         const cloudinary = require('cloudinary').v2;
         
         // Extract public ID from old banner URL
@@ -261,7 +245,6 @@ router.put('/:id', requireAuth(), async (req, res) => {
         const publicId = extractPublicIdFromCloudinaryUrl(user.banner);
         if (publicId) {
           const result = await cloudinary.uploader.destroy(publicId);
-          console.log('[UPDATE PROFILE] Old banner deletion result:', result);
         }
       } catch (error) {
         console.error('[UPDATE PROFILE] Error deleting old banner:', error);
@@ -270,16 +253,11 @@ router.put('/:id', requireAuth(), async (req, res) => {
     }
     
     // Update user
-    console.log('About to update database with filteredData:', filteredData);
     const updatedUser = await User.findByIdAndUpdate(
       user._id,
       { ...filteredData, updatedAt: new Date() },
       { new: true, runValidators: true }
     );
-    
-    console.log('Updated user avatar:', updatedUser.avatar);
-    console.log('Updated user banner:', updatedUser.banner);
-    console.log('Database update completed successfully');
     
     res.json({ 
       message: 'Profile updated successfully',
