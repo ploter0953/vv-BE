@@ -190,6 +190,12 @@ router.put('/:id', requireAuth(), async (req, res) => {
     console.log('Banner change:', user.banner !== filteredData.banner ? 'YES' : 'NO');
     console.log('New avatar is Clerk default:', filteredData.avatar?.includes('clerk.com') ? 'YES' : 'NO');
     console.log('New banner is empty:', filteredData.banner === '' ? 'YES' : 'NO');
+    console.log('Banner deletion condition:', {
+      hasBanner: !!user.banner,
+      isCloudinaryBanner: user.banner?.includes('cloudinary.com'),
+      bannerChanged: user.banner !== filteredData.banner,
+      newBannerEmpty: filteredData.banner === ''
+    });
     
     // Check if avatar is being updated and delete old avatar from Cloudinary
     // Handle both cases: new avatar upload and avatar deletion (set to Clerk default)
@@ -264,6 +270,7 @@ router.put('/:id', requireAuth(), async (req, res) => {
     }
     
     // Update user
+    console.log('About to update database with filteredData:', filteredData);
     const updatedUser = await User.findByIdAndUpdate(
       user._id,
       { ...filteredData, updatedAt: new Date() },
@@ -272,6 +279,7 @@ router.put('/:id', requireAuth(), async (req, res) => {
     
     console.log('Updated user avatar:', updatedUser.avatar);
     console.log('Updated user banner:', updatedUser.banner);
+    console.log('Database update completed successfully');
     
     res.json({ 
       message: 'Profile updated successfully',
