@@ -240,6 +240,9 @@ async function updateCollabStatus(collabId) {
         updateData.lastStatusCheck = new Date();
         await Collab.findByIdAndUpdate(collabId, updateData);
       }
+      
+      // Debug log để kiểm tra giá trị
+      console.log(`[DEBUG] Collab ${collabId}: hasLiveStream=${hasLiveStream}, hasWaitingRoom=${hasWaitingRoom}, currentPartners=${currentPartners}, status=${collab.status}`);
     }
 
     // 1. Nếu không có partner nào và stream đã bắt đầu hoặc kết thúc -> cancelled
@@ -265,8 +268,20 @@ async function updateCollabStatus(collabId) {
       return;
     }
 
-    // 3. Nếu stream đang live và có ít nhất 1 partner -> in_progress
+    // 3. Nếu stream đang live và có ít nhất 1 partner -> in_progress (ưu tiên cao nhất)
     if (hasLiveStream && currentPartners >= 1) {
+      console.log(`[STATUS UPDATE] Collab ${collabId}: hasLiveStream=${hasLiveStream}, currentPartners=${currentPartners} -> in_progress`);
+      await Collab.findByIdAndUpdate(collabId, {
+        status: 'in_progress',
+        startedAt: collab.startedAt || new Date(),
+        lastStatusCheck: new Date()
+      });
+      return;
+    }
+    
+    // 4.5. Nếu đang setting_up và stream đã live -> in_progress
+    if (collab.status === 'setting_up' && hasLiveStream && currentPartners >= 1) {
+      console.log(`[STATUS UPDATE] Collab ${collabId}: setting_up -> in_progress (hasLiveStream=${hasLiveStream}, currentPartners=${currentPartners})`);
       await Collab.findByIdAndUpdate(collabId, {
         status: 'in_progress',
         startedAt: collab.startedAt || new Date(),
@@ -279,16 +294,6 @@ async function updateCollabStatus(collabId) {
     if (hasWaitingRoom && currentPartners >= collab.maxPartners) {
       await Collab.findByIdAndUpdate(collabId, {
         status: 'setting_up',
-        lastStatusCheck: new Date()
-      });
-      return;
-    }
-    
-    // 4.5. Nếu đang setting_up và stream đã live -> in_progress
-    if (collab.status === 'setting_up' && hasLiveStream && currentPartners >= 1) {
-      await Collab.findByIdAndUpdate(collabId, {
-        status: 'in_progress',
-        startedAt: collab.startedAt || new Date(),
         lastStatusCheck: new Date()
       });
       return;
