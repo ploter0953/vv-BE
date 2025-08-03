@@ -283,6 +283,16 @@ async function updateCollabStatus(collabId) {
       });
       return;
     }
+    
+    // 4.5. Nếu đang setting_up và stream đã live -> in_progress
+    if (collab.status === 'setting_up' && hasLiveStream && currentPartners >= 1) {
+      await Collab.findByIdAndUpdate(collabId, {
+        status: 'in_progress',
+        startedAt: collab.startedAt || new Date(),
+        lastStatusCheck: new Date()
+      });
+      return;
+    }
 
     // 5. Nếu chưa đủ số người và stream chưa bắt đầu -> open
     if (hasWaitingRoom && currentPartners < collab.maxPartners) {
@@ -969,21 +979,21 @@ router.put('/:id/stream-info', youtubeApiLimiter, async (req, res) => {
         try {
           const videoId = youtubeService.extractVideoId(partner.link);
           if (videoId) {
-            const streamInfo = await youtubeService.getStreamInfo(videoId);
+            const streamStatus = await youtubeService.checkStreamStatus(videoId, 1 * 60 * 1000); // 1 min cache for real-time updates
             
-            if (streamInfo) {
+            if (streamStatus && streamStatus.isValid) {
               updateData[partner.field] = {
-                isLive: streamInfo.isLive,
-                viewCount: streamInfo.viewCount || 0,
-                title: streamInfo.title || '',
-                thumbnail: streamInfo.thumbnail || '',
-                scheduledStartTime: streamInfo.scheduledStartTime || null
+                isLive: streamStatus.isLive,
+                viewCount: streamStatus.viewCount || 0,
+                title: streamStatus.title || '',
+                thumbnail: streamStatus.thumbnail || '',
+                scheduledStartTime: streamStatus.scheduledStartTime || null
               };
               
               // Cập nhật time_remaining nếu đây là stream của creator (stream_info_1)
-              if (partner.field === 'stream_info_1' && streamInfo.scheduledStartTime) {
+              if (partner.field === 'stream_info_1' && streamStatus.scheduledStartTime) {
                 const now = new Date();
-                const scheduledStart = new Date(streamInfo.scheduledStartTime);
+                const scheduledStart = new Date(streamStatus.scheduledStartTime);
                 const time_remaining = scheduledStart.getTime() - now.getTime();
                 updateData.time_remaining = time_remaining > 0 ? time_remaining : null;
               }

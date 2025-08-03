@@ -2226,6 +2226,19 @@ const updateCollabStatuses = async () => {
       });
     }
     
+    // Clean up cancelled collabs after 1 hour
+    const cancelledCollabs = await Collab.find({
+      status: 'cancelled',
+      endedAt: { $lt: oneHourAgo }
+    });
+    
+    if (cancelledCollabs.length > 0) {
+      await Collab.deleteMany({
+        status: 'cancelled',
+        endedAt: { $lt: oneHourAgo }
+      });
+    }
+    
   } catch (error) {
     console.error('Error in collab status update task:', error);
   } finally {
