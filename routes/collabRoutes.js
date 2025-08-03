@@ -220,6 +220,7 @@ async function updateCollabStatus(collabId) {
                 hasLiveStream = true;
                 hasWaitingRoom = false; // Ưu tiên live hơn waiting room
                 allStreamsEnded = false;
+                console.log(`[DEBUG] Stream ${partner.field} is LIVE: videoId=${videoId}`);
               } else if (streamStatus.isValid && streamStatus.isWaitingRoom) {
                 hasWaitingRoom = true;
                 allStreamsEnded = false;
@@ -284,6 +285,7 @@ async function updateCollabStatus(collabId) {
     
     // 4.5. Nếu đang setting_up và stream đã live -> in_progress
     if (collab.status === 'setting_up' && hasLiveStream && currentPartners >= 1) {
+      console.log(`[DEBUG] Setting up -> in_progress: collabId=${collabId}, hasLiveStream=${hasLiveStream}, currentPartners=${currentPartners}`);
       await Collab.findByIdAndUpdate(collabId, {
         status: 'in_progress',
         startedAt: collab.startedAt || new Date(),
@@ -294,6 +296,7 @@ async function updateCollabStatus(collabId) {
 
     // 4. Nếu đủ số người (currentPartners >= maxPartners) và stream chưa bắt đầu -> setting_up
     if (hasWaitingRoom && currentPartners >= collab.maxPartners) {
+      console.log(`[DEBUG] Setting up condition: collabId=${collabId}, hasWaitingRoom=${hasWaitingRoom}, currentPartners=${currentPartners}, maxPartners=${collab.maxPartners}`);
       await Collab.findByIdAndUpdate(collabId, {
         status: 'setting_up',
         lastStatusCheck: new Date()
