@@ -503,21 +503,54 @@ app.post('/api/users/fix-usernames', async (req, res) => {
 
 
 
-// Clerk sync endpoint from userRoutes.js
+// Clerk sync endpoint - unified endpoint for user sync
 app.post('/api/users/clerk-sync', requireAuth(), async (req, res) => {
   try {
+    console.log('[CLERK SYNC] Request received:', req.body);
     const { clerkId, email, username, avatar } = req.body;
+    
+    // Check database connection
+    console.log('[CLERK SYNC] MongoDB connection state:', mongoose.connection.readyState);
+    console.log('[CLERK SYNC] MongoDB connection name:', mongoose.connection.name);
+    
     if (!clerkId || !email) {
+      console.log('[CLERK SYNC] Error: Missing required fields');
       return res.status(400).json({ error: 'clerkId và email là bắt buộc' });
     }
+    
+    console.log('[CLERK SYNC] Looking for user with clerkId:', clerkId);
     let user = await User.findOne({ clerkId });
+    console.log('[CLERK SYNC] User found:', user ? 'YES' : 'NO');
+    
     if (user) {
-      // Đã có user, trả về profile
+      // Update existing user with Clerk data
+      console.log('[CLERK SYNC] Updating existing user');
+      const updateData = {
+        email: email || user.email,
+        username: username || user.username
+      };
+      
+      // Only update avatar if user doesn't have a custom avatar
+      const hasCustomAvatar = user.avatar && !user.avatar.includes('clerk.com');
+      const isClerkDefaultAvatar = user.avatar && user.avatar.includes('clerk.com');
+      
+      if (avatar && (!hasCustomAvatar || isClerkDefaultAvatar)) {
+        updateData.avatar = avatar;
+      }
+      
+      // Update user
+      Object.assign(user, updateData);
+      await user.save();
+      console.log('[CLERK SYNC] User updated successfully');
+      
       return res.json({
         user,
-        message: 'User đã tồn tại, trả về profile.'
+        message: 'User đã tồn tại, cập nhật profile.'
       });
     }
+    
+    // Create new user
+    console.log('[CLERK SYNC] Creating new user');
     
     // Generate username from email if not provided
     let finalUsername = username;
@@ -525,8 +558,7 @@ app.post('/api/users/clerk-sync', requireAuth(), async (req, res) => {
       finalUsername = email.split('@')[0]; // Use part before @ as username
     }
     
-    // Nếu chưa có, tạo mới user với các trường mặc định
-    user = await User.create({
+    const userData = {
       clerkId,
       email,
       username: finalUsername || 'User',
@@ -538,14 +570,35 @@ app.post('/api/users/clerk-sync', requireAuth(), async (req, res) => {
       website: '',
       profile_email: '',
       vtuber_description: '',
-      artist_description: ''
-    });
-    return res.status(201).json({
-      user,
-      message: 'Tạo user mới thành công.'
-    });
+      artist_description: '',
+      twitch: '',
+      youtube: '',
+      tiktok: '',
+      discord: '',
+      discord_id: '',
+      is_discord_verified: false,
+      balance: 0,
+      donated: 0,
+      donate_received: 0,
+      streamSchedule: []
+    };
+    
+    console.log('[CLERK SYNC] User data to create:', userData);
+    
+    try {
+      user = await User.create(userData);
+      console.log('[CLERK SYNC] User created successfully:', user._id);
+      
+      return res.status(201).json({
+        user,
+        message: 'Tạo user mới thành công.'
+      });
+    } catch (createError) {
+      console.error('[CLERK SYNC] Error creating user:', createError);
+      throw createError;
+    }
   } catch (error) {
-    console.error('Clerk sync error:', error);
+    console.error('[CLERK SYNC] Error:', error);
     res.status(500).json({ error: 'Lỗi server khi đồng bộ user với Clerk.' });
   }
 });

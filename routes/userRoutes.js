@@ -71,60 +71,9 @@ router.get('/clerk/:clerkId', async (req, res) => {
   }
 });
 
-// Sync Clerk user with backend
-router.post('/sync-clerk', async (req, res) => {
-  try {
-    const { clerkId, email, username, avatar } = req.body;
-    
-    if (!clerkId) {
-      return res.status(400).json({ message: 'Clerk ID is required' });
-    }
-    
-    // Try to find existing user by clerkId
-    let user = await User.findOne({ clerkId });
-    
-    if (user) {
-      // Update existing user with Clerk data
-      const updateData = {
-        email: email || user.email,
-        username: username || user.username
-      };
-      
-      // Only update avatar if user doesn't have a custom avatar
-      const hasCustomAvatar = user.avatar && !user.avatar.includes('clerk.com');
-      const isClerkDefaultAvatar = user.avatar && user.avatar.includes('clerk.com');
-      
-      if (avatar && (!hasCustomAvatar || isClerkDefaultAvatar)) {
-        updateData.avatar = avatar;
-      }
-      
-      // Update user
-      Object.assign(user, updateData);
-      await user.save();
-    } else {
-      // Create new user
-      const userData = {
-        clerkId,
-        email,
-        username,
-        badges: ['member']
-      };
-      
-      // Set avatar only if provided
-      if (avatar) {
-        userData.avatar = avatar;
-      }
-      
-      user = new User(userData);
-      await user.save();
-    }
-    
-    res.json({ user });
-  } catch (err) {
-    console.error('Error syncing Clerk user:', err);
-    res.status(500).json({ message: err.message });
-  }
-});
+
+
+
 
 // Lấy user theo username (PHẢI đặt trước route /:id)
 router.get('/username/:username', async (req, res) => {
