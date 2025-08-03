@@ -433,27 +433,38 @@ fixProfileEmailIndex();
 
 // Helper function to extract public_id from Cloudinary URL
 function extractPublicIdFromCloudinaryUrl(url) {
+  console.log('[EXTRACT PUBLIC ID] Processing URL:', url);
+  
   if (!url || !url.includes('cloudinary.com')) {
+    console.log('[EXTRACT PUBLIC ID] Not a Cloudinary URL');
     return null;
   }
   
   try {
     // Cloudinary URL format: https://res.cloudinary.com/cloud_name/image/upload/v1234567890/folder/filename.jpg
     const urlParts = url.split('/');
+    console.log('[EXTRACT PUBLIC ID] URL parts:', urlParts);
+    
     const uploadIndex = urlParts.findIndex(part => part === 'upload');
+    console.log('[EXTRACT PUBLIC ID] Upload index:', uploadIndex);
     
     if (uploadIndex !== -1 && uploadIndex + 2 < urlParts.length) {
       // Get the part after 'upload' and version
       const publicIdParts = urlParts.slice(uploadIndex + 2);
+      console.log('[EXTRACT PUBLIC ID] Public ID parts:', publicIdParts);
       
       // Remove file extension
       const publicId = publicIdParts.join('/').split('.')[0];
+      console.log('[EXTRACT PUBLIC ID] Final public ID:', publicId);
       return publicId;
+    } else {
+      console.log('[EXTRACT PUBLIC ID] Invalid URL structure');
     }
   } catch (error) {
-    console.error('Error extracting public_id from URL:', error.message);
+    console.error('[EXTRACT PUBLIC ID] Error extracting public_id from URL:', error.message);
   }
   
+  console.log('[EXTRACT PUBLIC ID] Returning null');
   return null;
 }
 
@@ -1411,25 +1422,34 @@ app.delete('/api/upload/image-by-url', requireAuth(), async (req, res) => {
   try {
     const { imageUrl } = req.body;
     
+    console.log('[DELETE IMAGE] Request to delete:', imageUrl);
+    
     if (!imageUrl) {
+      console.log('[DELETE IMAGE] Error: No image URL provided');
       return res.status(400).json({ error: 'Image URL is required' });
     }
     
     const publicId = extractPublicIdFromCloudinaryUrl(imageUrl);
+    console.log('[DELETE IMAGE] Extracted public ID:', publicId);
     
     if (!publicId) {
+      console.log('[DELETE IMAGE] Error: Invalid Cloudinary URL');
       return res.status(400).json({ error: 'Invalid Cloudinary URL' });
     }
     
+    console.log('[DELETE IMAGE] Calling Cloudinary destroy for public ID:', publicId);
     const result = await cloudinary.uploader.destroy(publicId);
+    console.log('[DELETE IMAGE] Cloudinary result:', result);
     
     if (result.result === 'ok') {
+      console.log('[DELETE IMAGE] Success: Image deleted from Cloudinary');
       res.json({ success: true, message: 'Xóa hình ảnh thành công', publicId });
     } else {
+      console.log('[DELETE IMAGE] Error: Cloudinary returned error:', result);
       res.status(400).json({ error: 'Không thể xóa hình ảnh' });
     }
   } catch (error) {
-    console.error('Delete image error:', error);
+    console.error('[DELETE IMAGE] Error:', error);
     res.status(500).json({ error: 'Lỗi khi xóa hình ảnh' });
   }
 });

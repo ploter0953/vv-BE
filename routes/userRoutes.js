@@ -223,6 +223,39 @@ router.put('/:id', requireAuth(), async (req, res) => {
     console.log('Update data:', updateData);
     console.log('Filtered data:', filteredData);
     
+    // Check if avatar is being updated and delete old avatar from Cloudinary
+    if (filteredData.avatar && user.avatar && user.avatar !== filteredData.avatar && user.avatar.includes('cloudinary.com')) {
+      try {
+        console.log('[UPDATE PROFILE] Deleting old avatar:', user.avatar);
+        const cloudinary = require('cloudinary').v2;
+        
+        // Extract public ID from old avatar URL
+        const extractPublicIdFromCloudinaryUrl = (url) => {
+          if (!url || !url.includes('cloudinary.com')) return null;
+          try {
+            const urlParts = url.split('/');
+            const uploadIndex = urlParts.findIndex(part => part === 'upload');
+            if (uploadIndex !== -1 && uploadIndex + 2 < urlParts.length) {
+              const publicIdParts = urlParts.slice(uploadIndex + 2);
+              return publicIdParts.join('/').split('.')[0];
+            }
+          } catch (error) {
+            console.error('[UPDATE PROFILE] Error extracting public ID:', error);
+          }
+          return null;
+        };
+        
+        const publicId = extractPublicIdFromCloudinaryUrl(user.avatar);
+        if (publicId) {
+          const result = await cloudinary.uploader.destroy(publicId);
+          console.log('[UPDATE PROFILE] Old avatar deletion result:', result);
+        }
+      } catch (error) {
+        console.error('[UPDATE PROFILE] Error deleting old avatar:', error);
+        // Continue with update even if delete fails
+      }
+    }
+    
     // Update user
     const updatedUser = await User.findByIdAndUpdate(
       user._id,
