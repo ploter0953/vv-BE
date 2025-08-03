@@ -530,12 +530,18 @@ app.post('/api/users/clerk-sync', requireAuth(), async (req, res) => {
         username: username || user.username
       };
       
-      // Only update avatar if user doesn't have a custom avatar
-      const hasCustomAvatar = user.avatar && !user.avatar.includes('clerk.com');
-      const isClerkDefaultAvatar = user.avatar && user.avatar.includes('clerk.com');
+      // Always update avatar if provided in request (this handles both new uploads and Clerk defaults)
+      console.log('[CLERK SYNC] Avatar update logic:');
+      console.log('  - Current avatar:', user.avatar);
+      console.log('  - New avatar from request:', avatar);
+      console.log('  - Has custom avatar:', user.avatar && !user.avatar.includes('clerk.com'));
+      console.log('  - Is Clerk default avatar:', user.avatar && user.avatar.includes('clerk.com'));
       
-      if (avatar && (!hasCustomAvatar || isClerkDefaultAvatar)) {
+      if (avatar) {
         updateData.avatar = avatar;
+        console.log('[CLERK SYNC] Will update avatar to:', avatar);
+      } else {
+        console.log('[CLERK SYNC] No avatar provided in request, keeping current avatar');
       }
       
       // Update user
