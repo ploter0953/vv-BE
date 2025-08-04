@@ -7,6 +7,7 @@ const mongoose = require('mongoose');
 const path = require('path');
 const cloudinary = require('cloudinary').v2;
 const multer = require('multer');
+const fs = require('fs');
 const userRoutes = require('./routes/userRoutes');
 const commissionRoutes = require('./routes/commissionRoutes');
 const orderRoutes = require('./routes/orderRoutes');
@@ -21,7 +22,10 @@ const Order = require('./models/Order');
 const Collab = require('./models/Collab');
 const Vote = require('./models/Vote');
 const Feedback = require('./models/Feedback');
-const { requireAuth } = require('@clerk/express');
+const { requireAuth, clerkExpressWithAuth } = require('@clerk/express');
+const rateLimit = require('express-rate-limit');
+const RedisStore = require('rate-limit-redis');
+const redis = require('redis');
 
 // Cloudinary configuration
 cloudinary.config({
@@ -31,7 +35,22 @@ cloudinary.config({
 });
 
 // Multer configuration for file uploads
-const storage = multer.memoryStorage();
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    // Create temp directory if it doesn't exist
+    const tempDir = path.join(__dirname, 'temp');
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+    cb(null, tempDir);
+  },
+  filename: (req, file, cb) => {
+    // Generate unique filename with timestamp and original name
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + '-' + file.originalname);
+  }
+});
+
 const upload = multer({ 
   storage: storage,
   limits: {
@@ -51,7 +70,7 @@ const upload = multer({
 const mediaUpload = multer({ 
   storage: storage,
   limits: {
-    fileSize: 40 * 1024 * 1024, // 40MB limit
+    fileSize: 40 * 1024 * 1024, // 40MB limit per file
   },
   fileFilter: (req, file, cb) => {
     // Accept images and videos
@@ -69,6 +88,91 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-producti
 
 // Trust proxy for rate limiting behind load balancer/proxy
 app.set('trust proxy', 1);
+
+// Redis configuration for rate limiting
+const redisClient = redis.createClient({
+  url: process.env.REDIS_URL || 'redis://localhost:6379',
+  password: process.env.REDIS_PASSWORD,
+  retry_strategy: (options) => {
+    if (options.error && options.error.code === 'ECONNREFUSED') {
+      // End reconnecting on a specific error and flush all commands with a individual error
+      return new Error('The server refused the connection');
+    }
+    if (options.total_retry_time > 1000 * 60 * 60) {
+      // End reconnecting after a specific timeout and flush all commands with a individual error
+      return new Error('Retry time exhausted');
+    }
+    if (options.attempt > 10) {
+      // End reconnecting with built in error
+      return undefined;
+    }
+    // Reconnect after
+    return Math.min(options.attempt * 100, 3000);
+  }
+});
+
+// Redis connection event listeners
+redisClient.on('connect', () => {
+  console.log('Redis client connected');
+});
+
+redisClient.on('ready', () => {
+  console.log('Redis client ready');
+});
+
+redisClient.on('error', (err) => {
+  console.log('Redis client error:', err);
+});
+
+// Connect to Redis
+redisClient.connect().catch(console.error);
+
+// Upload rate limiter with Redis
+const uploadRateLimiter = rateLimit({
+  store: new RedisStore({
+    client: redisClient,
+    prefix: 'upload_rate_limit:',
+    sendCommand: (...args) => redisClient.sendCommand(args)
+  }),
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10, // limit each user to 10 uploads per hour
+  message: {
+    error: 'Quá nhiều upload',
+    message: 'Vui lòng chờ một chút trước khi upload tiếp',
+    limit: '10 uploads per hour'
+  },
+  keyGenerator: (req) => req.auth?.userId || req.ip,
+  skip: (req) => !redisClient.isReady // Skip if Redis not ready
+});
+
+// Fallback in-memory rate limiting
+const uploadRateLimit = new Map();
+const UPLOAD_RATE_LIMIT = 10;
+const UPLOAD_RATE_WINDOW = 60 * 60 * 1000; // 1 hour
+
+function checkUploadRateLimit(userId) {
+  const now = Date.now();
+  const userKey = `upload_${userId}`;
+  
+  if (!uploadRateLimit.has(userKey)) {
+    uploadRateLimit.set(userKey, { count: 1, resetTime: now + UPLOAD_RATE_WINDOW });
+    return true;
+  }
+  
+  const userLimit = uploadRateLimit.get(userKey);
+  
+  if (now > userLimit.resetTime) {
+    uploadRateLimit.set(userKey, { count: 1, resetTime: now + UPLOAD_RATE_WINDOW });
+    return true;
+  }
+  
+  if (userLimit.count >= UPLOAD_RATE_LIMIT) {
+    return false;
+  }
+  
+  userLimit.count++;
+  return true;
+}
 
 // Middleware xác thực Clerk
 // const clerkMiddleware = clerkExpressWithAuth({ secretKey: process.env.CLERK_SECRET_KEY });
@@ -1239,12 +1343,93 @@ app.post('/api/upload/images', requireAuth(), upload.array('images', 10), async 
 
 
 
-// Simple rate limiting for uploads (in memory - for production use Redis)
+// Redis rate limiting for uploads
+const redis = require('redis');
+const rateLimit = require('express-rate-limit');
+const RedisStore = require('rate-limit-redis');
+
+// Redis client configuration
+const redisClient = redis.createClient({
+  url: process.env.REDIS_URL || 'redis://localhost:6379',
+  password: process.env.REDIS_PASSWORD,
+  retry_strategy: (options) => {
+    if (options.error && options.error.code === 'ECONNREFUSED') {
+      console.error('Redis server refused connection');
+      return new Error('Redis server refused connection');
+    }
+    if (options.total_retry_time > 1000 * 60 * 60) {
+      console.error('Redis retry time exhausted');
+      return new Error('Redis retry time exhausted');
+    }
+    if (options.attempt > 10) {
+      console.error('Redis max retry attempts reached');
+      return new Error('Redis max retry attempts reached');
+    }
+    return Math.min(options.attempt * 100, 3000);
+  }
+});
+
+// Connect to Redis
+redisClient.on('error', (err) => {
+  console.error('Redis Client Error:', err);
+});
+
+redisClient.on('connect', () => {
+  console.log('Redis Client Connected');
+});
+
+redisClient.on('ready', () => {
+  console.log('Redis Client Ready');
+});
+
+// Initialize Redis connection
+(async () => {
+  try {
+    await redisClient.connect();
+    console.log('Redis connection established');
+  } catch (error) {
+    console.error('Redis connection failed:', error);
+    // Fallback to in-memory if Redis is not available
+    console.log('Falling back to in-memory rate limiting');
+  }
+})();
+
+// Upload rate limiter with Redis
+const uploadRateLimiter = rateLimit({
+  store: new RedisStore({
+    client: redisClient,
+    prefix: 'upload_rate_limit:',
+    sendCommand: (...args) => redisClient.sendCommand(args)
+  }),
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10, // limit each user to 10 uploads per hour
+  message: {
+    error: 'Quá nhiều upload',
+    message: 'Vui lòng chờ một chút trước khi upload tiếp',
+    limit: '10 uploads per hour'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    return req.auth?.userId || req.ip;
+  },
+  skip: (req) => {
+    // Skip rate limiting if Redis is not available
+    return !redisClient.isReady;
+  }
+});
+
+// Fallback in-memory rate limiting (if Redis is not available)
 const uploadRateLimit = new Map();
-const UPLOAD_RATE_LIMIT = 10; // Max 10 uploads per hour per user
-const UPLOAD_RATE_WINDOW = 60 * 60 * 1000; // 1 hour in milliseconds
+const UPLOAD_RATE_LIMIT = 10;
+const UPLOAD_RATE_WINDOW = 60 * 60 * 1000; // 1 hour
 
 function checkUploadRateLimit(userId) {
+  // Use Redis if available, otherwise fallback to in-memory
+  if (redisClient.isReady) {
+    return true; // Redis will handle the rate limiting
+  }
+  
   const now = Date.now();
   const userKey = `upload_${userId}`;
   
@@ -1255,24 +1440,21 @@ function checkUploadRateLimit(userId) {
   
   const userLimit = uploadRateLimit.get(userKey);
   
-  // Reset if window expired
   if (now > userLimit.resetTime) {
     uploadRateLimit.set(userKey, { count: 1, resetTime: now + UPLOAD_RATE_WINDOW });
     return true;
   }
   
-  // Check if within limit
   if (userLimit.count >= UPLOAD_RATE_LIMIT) {
     return false;
   }
   
-  // Increment count
   userLimit.count++;
   return true;
 }
 
 // Upload media (image/video) to Cloudinary - up to 40MB
-app.post('/api/upload/media', (req, res, next) => {
+app.post('/api/upload/media', uploadRateLimiter, (req, res, next) => {
   console.log('=== UPLOAD MEDIA ENDPOINT STARTING ===');
   console.log('Headers:', {
     origin: req.headers.origin,
@@ -1307,14 +1489,18 @@ app.post('/api/upload/media', (req, res, next) => {
       });
     }
     
-    // Apply rate limiting
-    if (!checkUploadRateLimit(req.auth.userId)) {
-      return res.status(429).json({
-        error: 'Quá nhiều upload',
-        message: 'Vui lòng chờ một chút trước khi upload tiếp',
-        limit: `${UPLOAD_RATE_LIMIT} uploads per hour`
-      });
+    // Apply Redis rate limiting
+    if (!redisClient.isReady) {
+      // Fallback to in-memory rate limiting if Redis is not available
+      if (!checkUploadRateLimit(req.auth.userId)) {
+        return res.status(429).json({
+          error: 'Quá nhiều upload',
+          message: 'Vui lòng chờ một chút trước khi upload tiếp',
+          limit: `${UPLOAD_RATE_LIMIT} uploads per hour`
+        });
+      }
     }
+    // If Redis is ready, the uploadRateLimiter middleware will handle rate limiting
     
     next();
   });
@@ -1371,10 +1557,6 @@ app.post('/api/upload/media', (req, res, next) => {
       return res.status(400).json({ error: 'Video tối đa 40MB' });
     }
 
-    // Convert buffer to base64
-    const b64 = Buffer.from(req.file.buffer).toString('base64');
-    const dataURI = `data:${req.file.mimetype};base64,${b64}`;
-
     // Determine resource type
     const resourceType = req.file.mimetype.startsWith('video/') ? 'video' : 'image';
     
@@ -1384,7 +1566,7 @@ app.post('/api/upload/media', (req, res, next) => {
       folder = 'vtuberverse/users';
     }
 
-    // Upload to Cloudinary with appropriate settings
+    // Upload to Cloudinary with stream upload for better performance
     const uploadOptions = {
       folder,
       resource_type: resourceType,
@@ -1401,7 +1583,25 @@ app.post('/api/upload/media', (req, res, next) => {
       ];
     }
 
-    const result = await cloudinary.uploader.upload(dataURI, uploadOptions);
+    // Stream upload to Cloudinary instead of buffer + base64
+    const result = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        uploadOptions,
+        (error, result) => {
+          if (error) {
+            reject(error);
+          } else {
+            resolve(result);
+          }
+        }
+      );
+
+      // Pipe file stream to Cloudinary
+      fs.createReadStream(req.file.path).pipe(uploadStream);
+    });
+
+    // Clean up temporary file
+    fs.unlinkSync(req.file.path);
 
     res.json({
       success: true,
@@ -1415,6 +1615,189 @@ app.post('/api/upload/media', (req, res, next) => {
       bytes: result.bytes
     });
   } catch (error) {
+    // Clean up temporary file in case of error
+    if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    res.status(500).json({ error: 'Lỗi khi upload media: ' + error.message });
+  }
+});
+
+// Upload multiple media files for commission (max 3 files, total 120MB)
+app.post('/api/upload/commission-media', uploadRateLimiter, (req, res, next) => {
+  console.log('=== COMMISSION MEDIA UPLOAD ENDPOINT STARTING ===');
+  
+  // Apply requireAuth with custom error handling
+  requireAuth()(req, res, (err) => {
+    if (err) {
+      return res.status(401).json({ 
+        error: 'Authentication failed', 
+        details: err.message,
+        hint: 'Kiểm tra token Clerk'
+      });
+    }
+    
+    // Apply Redis rate limiting
+    if (!redisClient.isReady) {
+      if (!checkUploadRateLimit(req.auth.userId)) {
+        return res.status(429).json({
+          error: 'Quá nhiều upload',
+          message: 'Vui lòng chờ một chút trước khi upload tiếp',
+          limit: `${UPLOAD_RATE_LIMIT} uploads per hour`
+        });
+      }
+    }
+    
+    next();
+  });
+}, (req, res, next) => {
+  // Configure multer for multiple files with custom limits
+  const commissionUpload = multer({
+    storage: storage,
+    limits: {
+      fileSize: 40 * 1024 * 1024, // 40MB per file
+      files: 3 // Max 3 files
+    },
+    fileFilter: (req, file, cb) => {
+      // Accept images and videos
+      if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) {
+        cb(null, true);
+      } else {
+        cb(new Error('Chỉ chấp nhận file hình ảnh hoặc video'), false);
+      }
+    }
+  });
+  
+  commissionUpload.array('media', 3)(req, res, (err) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ error: 'File quá lớn. Tối đa 40MB mỗi file.' });
+      }
+      if (err.code === 'LIMIT_FILE_COUNT') {
+        return res.status(400).json({ error: 'Quá nhiều file. Tối đa 3 file.' });
+      }
+      if (err.message.includes('file hình ảnh hoặc video')) {
+        return res.status(400).json({ error: err.message });
+      }
+      return res.status(400).json({ error: 'Lỗi upload file: ' + err.message });
+    }
+    next();
+  });
+}, async (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ error: 'Không có file được upload' });
+    }
+    
+    if (req.files.length > 3) {
+      return res.status(400).json({ error: 'Tối đa 3 file được phép upload' });
+    }
+    
+    // Calculate total size
+    const totalSize = req.files.reduce((sum, file) => sum + file.size, 0);
+    const maxTotalSize = 120 * 1024 * 1024; // 120MB total
+    
+    if (totalSize > maxTotalSize) {
+      return res.status(400).json({ 
+        error: 'Tổng kích thước file quá lớn',
+        details: `Tổng: ${(totalSize / 1024 / 1024).toFixed(2)}MB, Tối đa: 120MB`
+      });
+    }
+    
+    // Validate each file
+    const allowedImageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    const allowedVideoTypes = ['video/mp4', 'video/webm', 'video/ogg', 'video/mov'];
+    const allAllowedTypes = [...allowedImageTypes, ...allowedVideoTypes];
+    
+    for (const file of req.files) {
+      if (!allAllowedTypes.includes(file.mimetype)) {
+        return res.status(400).json({ 
+          error: 'Loại file không được hỗ trợ',
+          allowed: 'Chỉ chấp nhận: JPEG, PNG, WebP, GIF, MP4, WebM, OGG, MOV'
+        });
+      }
+      
+      const maxImageSize = 5 * 1024 * 1024; // 5MB for images
+      const maxVideoSize = 40 * 1024 * 1024; // 40MB for videos
+      
+      if (file.mimetype.startsWith('image/') && file.size > maxImageSize) {
+        return res.status(400).json({ error: 'Ảnh tối đa 5MB' });
+      }
+      
+      if (file.mimetype.startsWith('video/') && file.size > maxVideoSize) {
+        return res.status(400).json({ error: 'Video tối đa 40MB' });
+      }
+    }
+    
+    // Upload all files to Cloudinary
+    const uploadPromises = req.files.map(async (file) => {
+      const resourceType = file.mimetype.startsWith('video/') ? 'video' : 'image';
+      
+      const uploadOptions = {
+        folder: 'vtuberverse/commission',
+        resource_type: resourceType,
+      };
+
+      if (resourceType === 'image') {
+        uploadOptions.transformation = [
+          { quality: 'auto', fetch_format: 'auto' }
+        ];
+      } else if (resourceType === 'video') {
+        uploadOptions.transformation = [
+          { quality: 'auto' }
+        ];
+      }
+
+      const result = await new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          uploadOptions,
+          (error, result) => {
+            if (error) {
+              reject(error);
+            } else {
+              resolve(result);
+            }
+          }
+        );
+
+        fs.createReadStream(file.path).pipe(uploadStream);
+      });
+
+      // Clean up temporary file
+      fs.unlinkSync(file.path);
+
+      return {
+        success: true,
+        url: result.secure_url,
+        public_id: result.public_id,
+        resource_type: resourceType,
+        width: result.width,
+        height: result.height,
+        duration: result.duration,
+        format: result.format,
+        bytes: result.bytes,
+        originalname: file.originalname
+      };
+    });
+    
+    const results = await Promise.all(uploadPromises);
+    
+    res.json({
+      success: true,
+      files: results,
+      totalFiles: results.length,
+      totalSize: results.reduce((sum, file) => sum + file.bytes, 0)
+    });
+    
+  } catch (error) {
+    // Clean up temporary files in case of error
+    if (req.files) {
+      req.files.forEach(file => {
+        if (file.path && fs.existsSync(file.path)) {
+          fs.unlinkSync(file.path);
+        }
+      });
+    }
     res.status(500).json({ error: 'Lỗi khi upload media: ' + error.message });
   }
 });
@@ -1926,13 +2309,6 @@ app.delete('/api/feedback/:id', requireAuth(), async (req, res) => {
   }
 });
 
-
-
-
-
-// Clerk sync endpoint from userRoutes.js
-// (ĐÃ CÓ TRONG ROUTER userRoutes.js, KHÔNG CẦN ĐỊNH NGHĨA LẠI Ở ĐÂY)
-
 // Mount userRoutes (ưu tiên /clerk/:clerkId trước /:id)
 app.use('/api/users', require('./routes/userRoutes'));
 
@@ -1978,47 +2354,6 @@ app.use((req, res) => {
     error: 'API endpoint not found',
     path: req.path,
     timestamp: new Date().toISOString()
-  });
-});
-
-// 404 handler for unmatched routes
-app.use((req, res, next) => {
-  console.log(`=== 404 ERROR ===`);
-  console.log(`Method: ${req.method}`);
-  console.log(`Path: ${req.path}`);
-  console.log(`Full URL: ${req.originalUrl}`);
-  console.log(`Headers:`, {
-    origin: req.headers.origin,
-    referer: req.headers.referer,
-    'user-agent': req.headers['user-agent']?.substring(0, 100)
-  });
-  
-  res.status(404).json({
-    error: 'Endpoint không tìm thấy',
-    method: req.method,
-    path: req.path,
-    message: `Không tìm thấy route ${req.method} ${req.path}`,
-    availableRoutes: {
-      upload: 'POST /api/upload/media',
-  
-      commissions: 'GET /api/commissions',
-      createCommission: 'POST /api/commissions'
-    }
-  });
-});
-
-// Global error handler
-app.use((error, req, res, next) => {
-  console.error('=== GLOBAL ERROR HANDLER ===');
-  console.error('Error:', error);
-  console.error('Request path:', req.path);
-  console.error('Request method:', req.method);
-  
-  res.status(500).json({
-    error: 'Lỗi server nội bộ',
-    message: error.message,
-    path: req.path,
-    method: req.method
   });
 });
 
@@ -2158,9 +2493,9 @@ const updateCollabStatuses = async () => {
           // Update all stream info at once
           await Collab.findByIdAndUpdate(collab._id, updateData);
           
-                        // Update status based on conditions
-              const currentPartners = [collab.partner_2, collab.partner_3].filter(Boolean).length;
-              const hasAtLeastOnePartner = currentPartners >= 1;
+          // Update status based on conditions
+          const currentPartners = [collab.partner_2, collab.partner_3].filter(Boolean).length;
+          const hasAtLeastOnePartner = currentPartners >= 1;
           
           if (hasLiveStream) {
             if (hasAtLeastOnePartner) {
@@ -2218,17 +2553,12 @@ const updateCollabStatuses = async () => {
     // Clean up ended collabs after 1 hour
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
     
-    // Debug: Check all ended collabs
-    const allEndedCollabs = await Collab.find({ status: 'ended' });
-    console.log(`[CLEANUP] Found ${allEndedCollabs.length} total ended collabs`);
-    
     const endedCollabs = await Collab.find({
       status: 'ended',
       endedAt: { $lt: oneHourAgo }
     });
     
     if (endedCollabs.length > 0) {
-      console.log(`[CLEANUP] Deleting ${endedCollabs.length} ended collabs older than 1 hour`);
       await Collab.deleteMany({
         status: 'ended',
         endedAt: { $lt: oneHourAgo }
@@ -2256,9 +2586,7 @@ const updateCollabStatuses = async () => {
 };
 
 // Start background task
-setInterval(updateCollabStatuses, 30000); // Every 30 seconds - checks collab status and updates based on timing rules
-
-// ==================== STREAM SCHEDULE CRON JOBS ====================
+setInterval(updateCollabStatuses, 30000); // Every 30 seconds
 
 // Reset all stream schedules every Monday at 00:00 (Vietnam time)
 const resetStreamSchedules = async () => {
@@ -2286,12 +2614,8 @@ const resetStreamSchedules = async () => {
   }
 };
 
-// Stream status update logic removed - no longer needed
-
 // Start stream schedule cron jobs
 setInterval(resetStreamSchedules, 60000); // Check every minute for Monday reset
-
-
 
 // Initialize Discord bot and donate functionality
 async function initializeDonateSystem() {
@@ -2329,4 +2653,4 @@ app.listen(PORT, '0.0.0.0', () => {
   
   // Initialize donate system after server starts
   initializeDonateSystem();
-}); 
+});
