@@ -24,18 +24,28 @@ const Vote = require('./models/Vote');
 const Feedback = require('./models/Feedback');
 const { requireAuth, clerkExpressWithAuth } = require('@clerk/express');
 const rateLimit = require('express-rate-limit');
-// Import RedisStore for rate-limit-redis latest version
-let RedisStore;
+
+// Import Redis and RedisStore with comprehensive error handling
+let redis = null;
+let RedisStore = null;
+
 try {
-  // For rate-limit-redis v4+, the import is different
-  const rateLimitRedis = require('rate-limit-redis');
-  RedisStore = rateLimitRedis.RedisStore || rateLimitRedis.default || rateLimitRedis;
-  console.log('RedisStore imported successfully');
+  redis = require('redis');
+  console.log('Redis client imported successfully');
 } catch (error) {
-  console.log('Failed to import RedisStore, using in-memory rate limiting only:', error.message);
+  console.log('Redis not available, using in-memory only:', error.message);
+}
+
+try {
+  if (redis) {
+    const rateLimitRedis = require('rate-limit-redis');
+    RedisStore = rateLimitRedis.RedisStore || rateLimitRedis.default || rateLimitRedis;
+    console.log('RedisStore imported successfully');
+  }
+} catch (error) {
+  console.log('RedisStore not available, using in-memory rate limiting only:', error.message);
   RedisStore = null;
 }
-const redis = require('redis');
 
 // Cloudinary configuration
 cloudinary.config({
@@ -145,14 +155,16 @@ const isRedisAvailable = () => {
   return redisClient && redisClient.isReady;
 };
 
-// Only create Redis client if config is valid
-if (redisConfig) {
+// Only create Redis client if config is valid and redis is available
+if (redisConfig && redis) {
   try {
     redisClient = redis.createClient(redisConfig);
   } catch (error) {
     console.log('Failed to create Redis client, using in-memory rate limiting:', error.message);
     redisClient = null;
   }
+} else {
+  console.log('Redis config or redis module not available, using in-memory rate limiting');
 }
 
 // Redis connection event listeners and connection

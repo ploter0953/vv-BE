@@ -3,9 +3,11 @@ const axios = require('axios');
 class YouTubeService {
   constructor() {
     this.apiKey = process.env.YOUTUBE_API_KEY;
+    this.enabled = !!this.apiKey;
+    
     if (!this.apiKey) {
-      console.error('YOUTUBE_API_KEY environment variable is required!');
-      throw new Error('YOUTUBE_API_KEY not configured');
+      console.warn('YOUTUBE_API_KEY not configured - YouTube features will be disabled');
+      return; // Don't initialize if no API key
     }
     this.baseUrl = 'https://www.googleapis.com/youtube/v3';
     this.cache = new Map();
