@@ -25,9 +25,8 @@ const Feedback = require('./models/Feedback');
 const { requireAuth, clerkExpressWithAuth } = require('@clerk/express');
 const rateLimit = require('express-rate-limit');
 
-// Import Redis and RedisStore with comprehensive error handling
+// Import Redis with comprehensive error handling
 let redis = null;
-let RedisStore = null;
 
 try {
   redis = require('redis');
@@ -36,16 +35,8 @@ try {
   console.log('Redis not available, using in-memory only:', error.message);
 }
 
-try {
-  if (redis) {
-    const rateLimitRedis = require('rate-limit-redis');
-    RedisStore = rateLimitRedis.RedisStore || rateLimitRedis.default || rateLimitRedis;
-    console.log('RedisStore imported successfully');
-  }
-} catch (error) {
-  console.log('RedisStore not available, using in-memory rate limiting only:', error.message);
-  RedisStore = null;
-}
+// Import custom Redis store compatible with Redis v4+
+const CustomRedisStore = require('./custom-redis-store');
 
 // Cloudinary configuration
 cloudinary.config({
@@ -199,18 +190,19 @@ if (redisClient) {
 // Upload rate limiter with Redis or fallback to in-memory
 let uploadRateLimiterStore;
 try {
-  if (redisClient && RedisStore && typeof RedisStore === 'function') {
-    uploadRateLimiterStore = new RedisStore({
+  if (redisClient && isRedisAvailable()) {
+    uploadRateLimiterStore = new CustomRedisStore({
       client: redisClient,
-      prefix: 'upload_rate_limit:'
+      prefix: 'upload_rate_limit:',
+      windowMs: 60 * 60 * 1000 // 1 hour
     });
-    console.log('Using Redis store for rate limiting');
+    console.log('Using custom Redis store for rate limiting');
   } else {
     uploadRateLimiterStore = undefined; // Use default in-memory store
-    console.log('Using in-memory store for rate limiting');
+    console.log('Redis not available, using in-memory store for rate limiting');
   }
 } catch (error) {
-  console.log('Failed to create RedisStore, using in-memory rate limiting:', error.message);
+  console.log('Failed to create Redis store, using in-memory rate limiting:', error.message);
   uploadRateLimiterStore = undefined;
 }
 
