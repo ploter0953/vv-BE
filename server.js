@@ -24,7 +24,17 @@ const Vote = require('./models/Vote');
 const Feedback = require('./models/Feedback');
 const { requireAuth, clerkExpressWithAuth } = require('@clerk/express');
 const rateLimit = require('express-rate-limit');
-const RedisStore = require('rate-limit-redis');
+// Import RedisStore for rate-limit-redis latest version
+let RedisStore;
+try {
+  // For rate-limit-redis v4+, the import is different
+  const rateLimitRedis = require('rate-limit-redis');
+  RedisStore = rateLimitRedis.RedisStore || rateLimitRedis.default || rateLimitRedis;
+  console.log('RedisStore imported successfully');
+} catch (error) {
+  console.log('Failed to import RedisStore, using in-memory rate limiting only:', error.message);
+  RedisStore = null;
+}
 const redis = require('redis');
 
 // Cloudinary configuration
@@ -90,50 +100,110 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-producti
 app.set('trust proxy', 1);
 
 // Redis configuration for rate limiting
-const redisClient = redis.createClient({
-  url: process.env.REDIS_URL || 'redis://localhost:6379',
-  password: process.env.REDIS_PASSWORD,
-  retry_strategy: (options) => {
-    if (options.error && options.error.code === 'ECONNREFUSED') {
-      // End reconnecting on a specific error and flush all commands with a individual error
-      return new Error('The server refused the connection');
-    }
-    if (options.total_retry_time > 1000 * 60 * 60) {
-      // End reconnecting after a specific timeout and flush all commands with a individual error
-      return new Error('Retry time exhausted');
-    }
-    if (options.attempt > 10) {
-      // End reconnecting with built in error
-      return undefined;
-    }
-    // Reconnect after
-    return Math.min(options.attempt * 100, 3000);
+const getRedisConfig = () => {
+  const redisUrl = process.env.REDIS_URL;
+  
+  // If no Redis URL is provided, return null to use in-memory fallback
+  if (!redisUrl) {
+    console.log('No REDIS_URL provided, using in-memory rate limiting');
+    return null;
   }
-});
+  
+  try {
+    // Validate and parse Redis URL
+    const url = new URL(redisUrl);
+    
+    // Check if protocol is valid
+    if (!['redis:', 'rediss:'].includes(url.protocol)) {
+      console.log('Invalid REDIS_URL protocol, using in-memory rate limiting');
+      return null;
+    }
+    
+    return {
+      url: redisUrl,
+      password: process.env.REDIS_PASSWORD || url.password,
+      socket: {
+        reconnectStrategy: (retries) => {
+          if (retries > 10) {
+            return new Error('Retry time exhausted');
+          }
+          return Math.min(retries * 100, 3000);
+        }
+      }
+    };
+  } catch (error) {
+    console.log('Invalid REDIS_URL format, using in-memory rate limiting:', error.message);
+    return null;
+  }
+};
 
-// Redis connection event listeners
-redisClient.on('connect', () => {
-  console.log('Redis client connected');
-});
+const redisConfig = getRedisConfig();
+let redisClient = null;
 
-redisClient.on('ready', () => {
-  console.log('Redis client ready');
-});
+// Helper function to safely check Redis availability
+const isRedisAvailable = () => {
+  return redisClient && redisClient.isReady;
+};
 
-redisClient.on('error', (err) => {
-  console.log('Redis client error:', err);
-});
+// Only create Redis client if config is valid
+if (redisConfig) {
+  try {
+    redisClient = redis.createClient(redisConfig);
+  } catch (error) {
+    console.log('Failed to create Redis client, using in-memory rate limiting:', error.message);
+    redisClient = null;
+  }
+}
 
-// Connect to Redis
-redisClient.connect().catch(console.error);
+// Redis connection event listeners and connection
+if (redisClient) {
+  redisClient.on('connect', () => {
+    console.log('Redis client connected');
+  });
 
-// Upload rate limiter with Redis
+  redisClient.on('ready', () => {
+    console.log('Redis client ready');
+  });
+
+  redisClient.on('error', (err) => {
+    console.log('Redis client error:', err.message);
+    // Don't crash the server on Redis errors
+  });
+
+  redisClient.on('end', () => {
+    console.log('Redis client disconnected');
+  });
+
+  // Connect to Redis with comprehensive error handling
+  redisClient.connect().catch((error) => {
+    console.log('Redis connection failed, using in-memory rate limiting:', error.message);
+    // Set redisClient to null so rate limiters fall back to in-memory
+    redisClient = null;
+  });
+} else {
+  console.log('Redis client not available, using in-memory rate limiting');
+}
+
+// Upload rate limiter with Redis or fallback to in-memory
+let uploadRateLimiterStore;
+try {
+  if (redisClient && RedisStore && typeof RedisStore === 'function') {
+    uploadRateLimiterStore = new RedisStore({
+      client: redisClient,
+      prefix: 'upload_rate_limit:'
+    });
+    console.log('Using Redis store for rate limiting');
+  } else {
+    uploadRateLimiterStore = undefined; // Use default in-memory store
+    console.log('Using in-memory store for rate limiting');
+  }
+} catch (error) {
+  console.log('Failed to create RedisStore, using in-memory rate limiting:', error.message);
+  uploadRateLimiterStore = undefined;
+}
+
 const uploadRateLimiter = rateLimit({
-  store: new RedisStore({
-    client: redisClient,
-    prefix: 'upload_rate_limit:',
-    sendCommand: (...args) => redisClient.sendCommand(args)
-  }),
+  store: uploadRateLimiterStore,
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 10, // limit each user to 10 uploads per hour
   message: {
@@ -142,7 +212,7 @@ const uploadRateLimiter = rateLimit({
     limit: '10 uploads per hour'
   },
   keyGenerator: (req) => req.auth?.userId || req.ip,
-  skip: (req) => !redisClient.isReady // Skip if Redis not ready
+  skip: (req) => !isRedisAvailable() // Skip if Redis not ready
 });
 
 // Fallback in-memory rate limiting
@@ -1382,7 +1452,7 @@ app.post('/api/upload/media', uploadRateLimiter, (req, res, next) => {
     }
     
     // Apply Redis rate limiting
-    if (!redisClient.isReady) {
+    if (!isRedisAvailable()) {
       // Fallback to in-memory rate limiting if Redis is not available
       if (!checkUploadRateLimit(req.auth.userId)) {
         return res.status(429).json({
@@ -1530,7 +1600,7 @@ app.post('/api/upload/commission-media', uploadRateLimiter, (req, res, next) => 
     }
     
     // Apply Redis rate limiting
-    if (!redisClient.isReady) {
+    if (!isRedisAvailable()) {
       if (!checkUploadRateLimit(req.auth.userId)) {
         return res.status(429).json({
           error: 'Quá nhiều upload',
@@ -2533,6 +2603,17 @@ async function initializeDonateSystem() {
     console.error('Error initializing donate system:', error);
   }
 }
+
+// Global error handlers
+process.on('unhandledRejection', (reason, promise) => {
+  console.log('Unhandled Rejection at:', promise, 'reason:', reason);
+  // Don't crash the server, just log the error
+});
+
+process.on('uncaughtException', (error) => {
+  console.log('Uncaught Exception:', error);
+  // Don't crash the server, just log the error
+});
 
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
