@@ -985,12 +985,8 @@ app.put('/api/orders/:id/confirm', requireAuth(), async (req, res) => {
     
     // Check if user is the commission owner (artist)
     const isArtist = order.commission.user.toString() === currentUser._id.toString();
-    console.log('Is user the artist?', isArtist);
-    console.log('Order commission user:', order.commission.user);
-    console.log('Current user ObjectId:', currentUser._id);
     
     if (!isArtist) {
-      console.log('User is not the artist - FORBIDDEN');
       return res.status(403).json({ error: 'Không có quyền xác nhận đơn hàng này' });
     }
     
@@ -1049,18 +1045,12 @@ app.put('/api/orders/:id/complete', requireAuth(), async (req, res) => {
     
     // Check if user is the commission owner (artist)
     const isArtist = order.commission.user.toString() === currentUser._id.toString();
-    console.log('Is user the artist?', isArtist);
-    console.log('Order commission user:', order.commission.user);
-    console.log('Current user ObjectId:', currentUser._id);
     
     if (!isArtist) {
-      console.log('User is not the artist - FORBIDDEN');
       return res.status(403).json({ error: 'Không có quyền hoàn thành đơn hàng này' });
     }
     
-    console.log('Current order status:', order.status);
     if (!['confirmed', 'customer_rejected', 'in_progress'].includes(order.status)) {
-      console.log('Order status not allowed for completion - BAD REQUEST');
       return res.status(400).json({ error: 'Đơn hàng chưa được xác nhận hoặc không thể hoàn thành' });
     }
     
@@ -1421,15 +1411,6 @@ app.post('/api/upload/images', requireAuth(), upload.array('images', 10), async 
 
 // Upload media (image/video) to Cloudinary - up to 40MB
 app.post('/api/upload/media', uploadRateLimiter, (req, res, next) => {
-  console.log('=== UPLOAD MEDIA ENDPOINT STARTING ===');
-  console.log('Headers:', {
-    origin: req.headers.origin,
-    referer: req.headers.referer,
-    'content-type': req.headers['content-type'],
-    'content-length': req.headers['content-length'],
-    authorization: req.headers.authorization ? 'Present' : 'Missing'
-  });
-  console.log('Query params:', req.query);
   
   // Additional security: Check for suspicious patterns
   const userAgent = req.headers['user-agent'] || '';
@@ -1484,15 +1465,6 @@ app.post('/api/upload/media', uploadRateLimiter, (req, res, next) => {
     next();
   });
 }, async (req, res) => {
-  console.log('=== MEDIA UPLOAD ENDPOINT HIT ===');
-  console.log('File:', req.file ? {
-    fieldname: req.file.fieldname,
-    originalname: req.file.originalname,
-    mimetype: req.file.mimetype,
-    size: req.file.size
-  } : 'NO FILE');
-  console.log('User:', req.auth?.userId);
-  console.log('Query:', req.query);
   
   try {
     if (!req.file) {
@@ -1591,7 +1563,6 @@ app.post('/api/upload/media', uploadRateLimiter, (req, res, next) => {
 
 // Upload multiple media files for commission (max 3 files, total 120MB)
 app.post('/api/upload/commission-media', uploadRateLimiter, (req, res, next) => {
-  console.log('=== COMMISSION MEDIA UPLOAD ENDPOINT STARTING ===');
   
   // Apply requireAuth with custom error handling
   requireAuth()(req, res, (err) => {

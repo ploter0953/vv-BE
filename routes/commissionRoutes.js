@@ -248,23 +248,11 @@ router.get('/', async (req, res) => {
       return res.status(500).json({ message: 'Database connection error' });
     }
 
-    console.log('Fetching commissions with populate...');
     const commissions = await Commission.find()
       .populate('user', 'username avatar bio email')
       .sort({ createdAt: -1 });
 
-    console.log(`Found ${commissions.length} commissions`);
-    
-    if (commissions.length > 0) {
-      const sampleCommission = commissions[0].toObject();
-      console.log('Sample commission user data:', sampleCommission.user);
-      console.log('Sample commission raw data:', {
-        _id: sampleCommission._id,
-        user: sampleCommission.user,
-        userType: typeof sampleCommission.user,
-        userIsObject: sampleCommission.user && typeof sampleCommission.user === 'object'
-      });
-    }
+
 
     const processedCommissions = commissions.map(commission => {
       const commissionObj = commission.toObject();
