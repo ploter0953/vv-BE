@@ -217,11 +217,15 @@ router.put('/:id', requireAuth(), async (req, res) => {
     const { id } = req.params;
     const updateData = req.body;
 
-
+    console.log('[UPDATE PROFILE] ===== PUT /:id route hit =====');
+    console.log('[UPDATE PROFILE] Request params:', { id });
+    console.log('[UPDATE PROFILE] Request auth:', { userId: req.auth?.userId });
+    console.log('[UPDATE PROFILE] Request body keys:', Object.keys(updateData));
 
     // Validate user authentication
     const userId = req.auth?.userId || req.auth?.user?.id;
     if (!userId) {
+      console.log('[UPDATE PROFILE] Authentication failed - no userId');
       return res.status(401).json({ message: 'User not authenticated' });
     }
 
