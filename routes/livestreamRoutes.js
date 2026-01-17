@@ -71,9 +71,22 @@ async function searchChannelStreams(channelId) {
     }
 }
 
+// Simple in-memory cache
+let livestreamsCache = {
+    data: [],
+    lastFetch: 0
+};
+const CACHE_DURATION = 60 * 1000; // 60 seconds
+
 // GET /api/livestreams - Get all active livestreams from VTubers
 router.get('/', async (req, res) => {
     try {
+        // Check cache
+        const now = Date.now();
+        if (livestreamsCache.data.length > 0 && (now - livestreamsCache.lastFetch < CACHE_DURATION)) {
+            return res.json({ livestreams: livestreamsCache.data });
+        }
+
         // Find all users with 'vtuber' badge and YouTube channel
         const vtubers = await User.find({
             badges: 'vtuber',
@@ -129,9 +142,20 @@ router.get('/', async (req, res) => {
             return 0;
         });
 
+        // Update cache
+        livestreamsCache = {
+            data: livestreams,
+            lastFetch: now
+        };
+
         res.json({ livestreams });
     } catch (error) {
         console.error('Error fetching livestreams:', error);
+        // Return cached data if available on error
+        if (livestreamsCache.data.length > 0) {
+            return res.json({ livestreams: livestreamsCache.data });
+        }
+
         res.status(500).json({
             error: 'Không thể tải danh sách livestream',
             livestreams: []
