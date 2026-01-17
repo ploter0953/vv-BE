@@ -108,7 +108,9 @@ router.post('/clerk-sync', async (req, res) => {
     });
   } catch (err) {
     console.error('[CLERK SYNC] Error:', err);
-    res.status(500).json({ message: err.message });
+    console.error('[CLERK SYNC] Error message:', err.message);
+    console.error('[CLERK SYNC] Error stack:', err.stack);
+    res.status(500).json({ message: err.message, error: 'Failed to sync user' });
   }
 });
 

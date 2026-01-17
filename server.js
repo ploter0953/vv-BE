@@ -411,8 +411,8 @@ app.use('/api', (req, res, next) => {
     return next();
   }
 
-  // For webhook endpoints, skip origin validation (Casso, etc.)
-  if (req.path.startsWith('/casso-webhook')) {
+  // For webhook endpoints, skip origin validation (Casso, Clerk, etc.)
+  if (req.path.startsWith('/casso-webhook') || req.path.includes('/clerk-sync')) {
     return next();
   }
 
@@ -479,13 +479,13 @@ app.use('/api', (req, res, next) => {
     return next();
   }
 
-  // For webhook endpoints, skip referer validation (Casso, etc.)
-  if (req.path.startsWith('/casso-webhook')) {
+  // For webhook endpoints, skip referer validation (Casso, Clerk, etc.)
+  if (req.path.startsWith('/casso-webhook') || req.path.includes('/clerk-sync')) {
     return next();
   }
 
   // For webhook endpoints, skip referer validation (Casso, etc.)
-  if (req.path.startsWith('/casso-webhook')) {
+  if (req.path.startsWith('/casso-webhook') || req.path.includes('/clerk-sync')) {
     return next();
   }
 
@@ -527,8 +527,8 @@ app.use('/api', (req, res, next) => {
     return next();
   }
 
-  // Skip user-agent check for webhook endpoints (Casso, etc.)
-  if (req.path.startsWith('/casso-webhook')) {
+  // Skip user-agent check for webhook endpoints (Casso, Clerk, etc.)
+  if (req.path.startsWith('/casso-webhook') || req.path.includes('/clerk-sync')) {
     console.log('Skipping user-agent validation for webhook endpoint:', req.path);
     return next();
   }
@@ -683,91 +683,6 @@ app.post('/api/users/fix-usernames', async (req, res) => {
 });
 
 
-
-// Clerk sync endpoint - unified endpoint for user sync
-app.post('/api/users/clerk-sync', requireAuth(), async (req, res) => {
-  try {
-    const { clerkId, email, username, avatar } = req.body;
-
-    if (!clerkId || !email) {
-      return res.status(400).json({ error: 'clerkId và email là bắt buộc' });
-    }
-
-    let user = await User.findOne({ clerkId });
-
-    if (user) {
-      // Update existing user with Clerk data
-      console.log('[CLERK SYNC] Updating existing user');
-      const updateData = {
-        email: email || user.email,
-        username: username || user.username
-      };
-
-      // Only update avatar if provided in request AND user doesn't have a custom avatar
-      const hasCustomAvatar = user.avatar && !user.avatar.includes('clerk.com');
-      const isClerkDefaultAvatar = user.avatar && user.avatar.includes('clerk.com');
-
-      if (avatar && (!hasCustomAvatar || isClerkDefaultAvatar)) {
-        updateData.avatar = avatar;
-      }
-
-      // Update user
-      Object.assign(user, updateData);
-      await user.save();
-
-      return res.json({
-        user,
-        message: 'User đã tồn tại, cập nhật profile.'
-      });
-    }
-
-    // Create new user
-
-    // Generate username from email if not provided
-    let finalUsername = username;
-    if (!finalUsername && email) {
-      finalUsername = email.split('@')[0]; // Use part before @ as username
-    }
-
-    const userData = {
-      clerkId,
-      email,
-      username: finalUsername || 'User',
-      avatar: avatar || '',
-      badges: ['member'],
-      bio: '',
-      description: '',
-      facebook: '',
-      website: '',
-      profile_email: '',
-      vtuber_description: '',
-      artist_description: '',
-      twitch: '',
-      youtube: '',
-      tiktok: '',
-      discord: '',
-      discord_id: '',
-      is_discord_verified: false,
-      balance: 0,
-      donated: 0,
-      donate_received: 0,
-      streamSchedule: []
-    };
-
-    try {
-      user = await User.create(userData);
-
-      return res.status(201).json({
-        user,
-        message: 'Tạo user mới thành công.'
-      });
-    } catch (createError) {
-      throw createError;
-    }
-  } catch (error) {
-    res.status(500).json({ error: 'Lỗi server khi đồng bộ user với Clerk.' });
-  }
-});
 
 // Health check endpoint with origin validation info
 app.get('/api/health', (req, res) => {
