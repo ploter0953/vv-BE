@@ -48,12 +48,17 @@ router.get('/', async (req, res) => {
 
 // Sync Clerk user with backend (create or update)
 router.post('/clerk-sync', async (req, res) => {
+  console.log('=== CLERK-SYNC ROUTE HIT ===');
+  console.log('[CLERK SYNC] Headers:', req.headers);
+  console.log('[CLERK SYNC] Body:', req.body);
+
   try {
     const { clerkId, email, username, avatar } = req.body;
 
     console.log('[CLERK SYNC] Request:', { clerkId, email, username, hasAvatar: !!avatar });
 
     if (!clerkId) {
+      console.log('[CLERK SYNC] ERROR: Missing clerkId');
       return res.status(400).json({ message: 'clerkId is required' });
     }
 
