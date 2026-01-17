@@ -86,13 +86,31 @@ router.post('/clerk-sync', async (req, res) => {
 
       console.log('[CLERK SYNC] User updated:', user._id);
     } else {
-      // Create new user
+      // Create new user with all fields initialized
       user = new User({
         clerkId,
         email,
         username: username || email.split('@')[0],
         avatar: avatar || '',
+        banner: '',
+        bio: '',
+        description: '',
         badges: ['member'],
+        facebook: '',
+        website: '',
+        profile_email: '',
+        vtuber_description: '',
+        artist_description: '',
+        twitch: '',
+        youtube: '',
+        tiktok: '',
+        discord: '',
+        discord_id: '',
+        balance: 0,
+        donated: 0,
+        donate_received: 0,
+        is_discord_verified: false,
+        streamSchedule: [],
         createdAt: new Date(),
         updatedAt: new Date()
       });
