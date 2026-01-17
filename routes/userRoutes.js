@@ -139,27 +139,43 @@ router.get('/clerk/:clerkId', async (req, res) => {
 // Lấy user theo username (PHẢI đặt trước route /:id)
 router.get('/username/:username', async (req, res) => {
   try {
+    console.log('[GET USER BY USERNAME] Request:', { username: req.params.username, time: new Date().toISOString() });
     const user = await User.findOne({ username: req.params.username });
-    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (!user) {
+      console.log('[GET USER BY USERNAME] User not found:', req.params.username);
+      return res.status(404).json({ message: 'User not found' });
+    }
+    console.log('[GET USER BY USERNAME] User found:', { _id: user._id, username: user.username });
     res.json({ user });
   } catch (err) {
+    console.error('[GET USER BY USERNAME] Error:', err);
     res.status(500).json({ message: err.message });
   }
 });
 
 // Lấy commissions của user (hỗ trợ cả ObjectId và ClerkId)
 router.get('/:id/commissions', async (req, res) => {
-  const { id } = req.params;
-  let user;
-  const mongoose = require('mongoose');
-  if (id.startsWith('user_')) {
-    user = await User.findOne({ clerkId: id });
-  } else if (mongoose.Types.ObjectId.isValid(id)) {
-    user = await User.findById(id);
+  try {
+    const { id } = req.params;
+    console.log('[GET USER COMMISSIONS] Request:', { id, time: new Date().toISOString() });
+    let user;
+    const mongoose = require('mongoose');
+    if (id.startsWith('user_')) {
+      user = await User.findOne({ clerkId: id });
+    } else if (mongoose.Types.ObjectId.isValid(id)) {
+      user = await User.findById(id);
+    }
+    if (!user) {
+      console.log('[GET USER COMMISSIONS] User not found:', id);
+      return res.status(404).json({ message: 'User not found' });
+    }
+    const commissions = await require('../models/Commission').find({ user: user._id });
+    console.log('[GET USER COMMISSIONS] Found commissions:', commissions.length);
+    res.json({ commissions });
+  } catch (err) {
+    console.error('[GET USER COMMISSIONS] Error:', err);
+    res.status(500).json({ message: err.message });
   }
-  if (!user) return res.status(404).json({ message: 'User not found' });
-  const commissions = await require('../models/Commission').find({ user: user._id });
-  res.json({ commissions });
 });
 
 // Lấy user theo id (hỗ trợ cả ObjectId và ClerkId)
