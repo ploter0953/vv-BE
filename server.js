@@ -2264,6 +2264,9 @@ app.use('/api/donate', require('./routes/donateRoutes'));
 // Mount livestreamRoutes
 app.use('/api/livestreams', require('./routes/livestreamRoutes'));
 
+// Mount spotlight routes
+app.use('/api/spotlight', require('./routes/spotlightRoutes'));
+
 // Mount Casso webhook route
 app.use('/api/casso-webhook', require('./donate/xulinaptien'));
 
