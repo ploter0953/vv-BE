@@ -2267,6 +2267,16 @@ app.use('/api/livestreams', require('./routes/livestreamRoutes'));
 // Mount spotlight routes
 app.use('/api/spotlight', require('./routes/spotlightRoutes'));
 
+// Root path handler for health checks and Clerk SDK
+app.get('/', (req, res) => {
+  res.json({
+    status: 'ok',
+    message: 'Project VTuber API Server',
+    version: '1.0.0',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Mount Casso webhook route
 app.use('/api/casso-webhook', require('./donate/xulinaptien'));
 
