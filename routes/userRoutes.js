@@ -10,17 +10,17 @@ const router = express.Router();
 router.get('/', async (req, res) => {
   try {
     const { username, getAll } = req.query;
-    
+
     // If explicitly requesting all users (for backward compatibility)
     if (getAll === 'true') {
       const users = await User.find({}).sort({ username: 1 });
       return res.json({ users });
     }
-    
+
     // Search users by username
     if (username && username.trim()) {
       const searchTerm = username.trim();
-      
+
       // Search with priority: exact match first, then partial match
       const searchQuery = {
         $or: [
@@ -34,14 +34,75 @@ router.get('/', async (req, res) => {
           { email: { $regex: searchTerm, $options: 'i' } }
         ]
       };
-      
+
       const users = await User.find(searchQuery).sort({ username: 1 });
       return res.json({ users });
     }
-    
+
     // If no query parameters, return empty array (not all users for security)
     return res.json({ users: [] });
   } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Sync Clerk user with backend (create or update)
+router.post('/clerk-sync', async (req, res) => {
+  try {
+    const { clerkId, email, username, avatar } = req.body;
+
+    console.log('[CLERK SYNC] Request:', { clerkId, email, username, hasAvatar: !!avatar });
+
+    if (!clerkId) {
+      return res.status(400).json({ message: 'clerkId is required' });
+    }
+
+    // Find existing user by clerkId
+    let user = await User.findOne({ clerkId });
+
+    if (user) {
+      // Update existing user (preserve custom fields)
+      const updateData = {
+        email,
+        username: username || user.username,
+        updatedAt: new Date()
+      };
+
+      // Only update avatar if provided and user doesn't have custom avatar
+      if (avatar && (!user.avatar || user.avatar.includes('clerk.com'))) {
+        updateData.avatar = avatar;
+      }
+
+      user = await User.findByIdAndUpdate(
+        user._id,
+        updateData,
+        { new: true, runValidators: true }
+      );
+
+      console.log('[CLERK SYNC] User updated:', user._id);
+    } else {
+      // Create new user
+      user = new User({
+        clerkId,
+        email,
+        username: username || email.split('@')[0],
+        avatar: avatar || '',
+        badges: ['member'],
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+
+      await user.save();
+      console.log('[CLERK SYNC] New user created:', user._id);
+    }
+
+    res.json({
+      success: true,
+      user,
+      message: user ? 'User synced successfully' : 'User created successfully'
+    });
+  } catch (err) {
+    console.error('[CLERK SYNC] Error:', err);
     res.status(500).json({ message: err.message });
   }
 });
@@ -51,19 +112,19 @@ router.get('/clerk/:clerkId', async (req, res) => {
   try {
     console.log('[GET USER BY CLERK ID] Requesting user with clerkId:', req.params.clerkId);
     const user = await User.findOne({ clerkId: req.params.clerkId });
-    
+
     if (!user) {
       console.log('[GET USER BY CLERK ID] User not found');
       return res.status(404).json({ message: 'User not found' });
     }
-    
+
     console.log('[GET USER BY CLERK ID] User found:', {
       _id: user._id,
       clerkId: user.clerkId,
       username: user.username,
       avatar: user.avatar ? 'Has avatar' : 'No avatar'
     });
-    
+
     res.json({ user });
   } catch (err) {
     console.error('[GET USER BY CLERK ID] Error:', err);
@@ -106,7 +167,7 @@ router.get('/:id', async (req, res) => {
   const { id } = req.params;
   let user;
   const mongoose = require('mongoose');
-  
+
   try {
     console.log('[USER PROFILE] Query:', { id, time: new Date().toISOString() });
     if (id.startsWith('user_')) {
@@ -118,7 +179,7 @@ router.get('/:id', async (req, res) => {
     } else {
       return res.status(400).json({ message: 'Invalid user id' });
     }
-    
+
     if (!user) return res.status(404).json({ message: 'User not found' });
     res.json({ user });
   } catch (err) {
@@ -132,15 +193,15 @@ router.put('/:id', requireAuth(), async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = req.body;
-    
 
-    
+
+
     // Validate user authentication
     const userId = req.auth?.userId || req.auth?.user?.id;
     if (!userId) {
       return res.status(401).json({ message: 'User not authenticated' });
     }
-    
+
     // Find user by ID or Clerk ID
     let user;
     console.log('Looking for user with ID:', id);
@@ -153,25 +214,25 @@ router.put('/:id', requireAuth(), async (req, res) => {
     } else {
       return res.status(400).json({ message: 'Invalid user id' });
     }
-    
+
     if (!user) {
       console.log('User not found for ID:', id);
       return res.status(404).json({ message: 'User not found' });
     }
-    
+
     // Check if user is updating their own profile
     if (user.clerkId !== userId && String(user._id) !== userId) {
       return res.status(403).json({ message: 'Unauthorized to update this profile' });
     }
-    
+
     // Define allowed fields that can be updated
     const allowedFields = [
-      'username', 'bio', 'avatar', 'banner', 'description', 'socialLinks', 
-      'commissionRates', 'portfolio', 'badges', 'facebook', 'website', 
-      'profile_email', 'vtuber_description', 'artist_description', 
+      'username', 'bio', 'avatar', 'banner', 'description', 'socialLinks',
+      'commissionRates', 'portfolio', 'badges', 'facebook', 'website',
+      'profile_email', 'vtuber_description', 'artist_description',
       'twitch', 'youtube', 'tiktok', 'discord', 'discord_id'
     ];
-    
+
     // Filter out non-allowed fields
     const filteredData = {};
     Object.keys(updateData).forEach(key => {
@@ -179,18 +240,18 @@ router.put('/:id', requireAuth(), async (req, res) => {
         filteredData[key] = updateData[key];
       }
     });
-    
 
-    
+
+
     // Check if avatar is being updated and delete old avatar from Cloudinary
     // Handle both cases: new avatar upload and avatar deletion (set to Clerk default)
-    if (user.avatar && user.avatar.includes('cloudinary.com') && 
-        filteredData.avatar !== user.avatar && 
-        !filteredData.avatar.includes('clerk.com')) {
+    if (user.avatar && user.avatar.includes('cloudinary.com') &&
+      filteredData.avatar !== user.avatar &&
+      !filteredData.avatar.includes('clerk.com')) {
       try {
 
         const cloudinary = require('cloudinary').v2;
-        
+
         // Extract public ID from old avatar URL
         const extractPublicIdFromCloudinaryUrl = (url) => {
           if (!url || !url.includes('cloudinary.com')) return null;
@@ -206,7 +267,7 @@ router.put('/:id', requireAuth(), async (req, res) => {
           }
           return null;
         };
-        
+
         const publicId = extractPublicIdFromCloudinaryUrl(user.avatar);
         if (publicId) {
           const result = await cloudinary.uploader.destroy(publicId);
@@ -216,16 +277,16 @@ router.put('/:id', requireAuth(), async (req, res) => {
         // Continue with update even if delete fails
       }
     }
-    
+
     // Check if banner is being updated and delete old banner from Cloudinary
     // Handle both cases: new banner upload and banner deletion (empty string)
-    if (user.banner && user.banner.includes('cloudinary.com') && 
-        filteredData.banner !== user.banner && 
-        filteredData.banner === '') {
+    if (user.banner && user.banner.includes('cloudinary.com') &&
+      filteredData.banner !== user.banner &&
+      filteredData.banner === '') {
       try {
 
         const cloudinary = require('cloudinary').v2;
-        
+
         // Extract public ID from old banner URL
         const extractPublicIdFromCloudinaryUrl = (url) => {
           if (!url || !url.includes('cloudinary.com')) return null;
@@ -241,7 +302,7 @@ router.put('/:id', requireAuth(), async (req, res) => {
           }
           return null;
         };
-        
+
         const publicId = extractPublicIdFromCloudinaryUrl(user.banner);
         if (publicId) {
           const result = await cloudinary.uploader.destroy(publicId);
@@ -251,17 +312,17 @@ router.put('/:id', requireAuth(), async (req, res) => {
         // Continue with update even if delete fails
       }
     }
-    
+
     // Update user
     const updatedUser = await User.findByIdAndUpdate(
       user._id,
       { ...filteredData, updatedAt: new Date() },
       { new: true, runValidators: true }
     );
-    
-    res.json({ 
+
+    res.json({
       message: 'Profile updated successfully',
-      user: updatedUser 
+      user: updatedUser
     });
   } catch (error) {
     console.error('Error updating user profile:', error);
@@ -290,7 +351,7 @@ router.get('/:id/stream-schedule', async (req, res) => {
   try {
     const { id } = req.params;
     let user;
-    
+
     if (id.startsWith('user_')) {
       user = await User.findOne({ clerkId: id });
     } else if (mongoose.Types.ObjectId.isValid(id)) {
@@ -298,14 +359,14 @@ router.get('/:id/stream-schedule', async (req, res) => {
     } else {
       return res.status(400).json({ message: 'Invalid user id' });
     }
-    
+
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-    
-    res.json({ 
+
+    res.json({
       streamSchedule: user.streamSchedule || [],
-      success: true 
+      success: true
     });
   } catch (error) {
     console.error('Error getting stream schedule:', error);
@@ -320,7 +381,7 @@ router.post('/:id/stream-schedule', requireAuth(), async (req, res) => {
     const { streamLink } = req.body;
     const userId = req.auth?.userId || req.auth?.user?.id;
     console.log('[STREAM SCHEDULE] Add/Update request:', { id, userId, streamLink, time: new Date().toISOString() });
-    
+
     // Validate user authentication
     let user;
     if (id.startsWith('user_')) {
@@ -330,43 +391,43 @@ router.post('/:id/stream-schedule', requireAuth(), async (req, res) => {
     } else {
       return res.status(400).json({ message: 'Invalid user id' });
     }
-    
+
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-    
+
     // So sánh cả ObjectId và ClerkId
     if (user.clerkId !== userId && String(user._id) !== userId) {
       return res.status(403).json({ message: 'Unauthorized' });
     }
-    
+
     // Kiểm tra badge vtuber
     if (!user.badges || !user.badges.includes('vtuber')) {
       return res.status(403).json({ message: 'Chỉ user có badge vtuber mới có thể thêm lịch stream' });
     }
-    
+
     // Validate YouTube URL
     if (!streamLink || !youtubeService.isValidYouTubeUrl(streamLink)) {
       return res.status(400).json({ message: 'Invalid YouTube URL' });
     }
-    
+
     // Extract video ID and get stream info
     const videoId = youtubeService.extractVideoId(streamLink);
     if (!videoId) {
       return res.status(400).json({ message: 'Could not extract video ID from URL' });
     }
-    
+
     // Get stream status and info
     const streamInfo = await youtubeService.checkStreamStatus(videoId);
     if (!streamInfo.isValid) {
       return res.status(400).json({ message: 'Invalid or private stream' });
     }
-    
+
     // If no scheduled time, return error
     if (!streamInfo.scheduledStartTime) {
       return res.status(400).json({ message: 'Stream must have a scheduled start time' });
     }
-    
+
     // Convert to Vietnam timezone (UTC+7)
     const scheduledTime = new Date(streamInfo.scheduledStartTime);
     const vietnamTime = new Date(scheduledTime.getTime() + (7 * 60 * 60 * 1000));
@@ -374,7 +435,7 @@ router.post('/:id/stream-schedule', requireAuth(), async (req, res) => {
     // Kiểm tra nếu stream vượt quá tuần hiện tại
     const now = new Date();
     const nowVN = new Date(now.getTime() + (7 * 60 * 60 * 1000));
-    
+
     // Tính tuần hiện tại (bắt đầu từ thứ 2)
     const getCurrentWeekStart = (date) => {
       const d = new Date(date);
@@ -382,7 +443,7 @@ router.post('/:id/stream-schedule', requireAuth(), async (req, res) => {
       const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Thứ 2 là ngày đầu tuần
       return new Date(d.setDate(diff));
     };
-    
+
     const getCurrentWeekEnd = (date) => {
       const weekStart = getCurrentWeekStart(date);
       const weekEnd = new Date(weekStart);
@@ -390,29 +451,29 @@ router.post('/:id/stream-schedule', requireAuth(), async (req, res) => {
       weekEnd.setHours(23, 59, 59, 999); // Cuối ngày chủ nhật
       return weekEnd;
     };
-    
+
     const currentWeekStart = getCurrentWeekStart(nowVN);
     const currentWeekEnd = getCurrentWeekEnd(nowVN);
-    
+
     // Kiểm tra nếu stream không thuộc tuần hiện tại
     if (vietnamTime < currentWeekStart || vietnamTime > currentWeekEnd) {
-      return res.status(400).json({ 
-        error: 'out_of_week', 
-        message: 'Thời gian stream bạn vừa nhập vượt quá tuần hiện tại' 
+      return res.status(400).json({
+        error: 'out_of_week',
+        message: 'Thời gian stream bạn vừa nhập vượt quá tuần hiện tại'
       });
     }
-    
+
     // Get day of week (0 = Sunday, 1 = Monday, etc.)
     const dayOfWeek = vietnamTime.getDay();
     const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     const dayName = dayNames[dayOfWeek];
-    
+
     // Get time slot (HH:mm format)
     const timeSlot = vietnamTime.toTimeString().slice(0, 5);
-    
+
     // Check if slot already exists for this day
     const existingSlotIndex = user.streamSchedule.findIndex(slot => slot.dayOfWeek === dayName);
-    
+
     const newSlot = {
       dayOfWeek: dayName,
       timeSlot: timeSlot,
@@ -420,7 +481,7 @@ router.post('/:id/stream-schedule', requireAuth(), async (req, res) => {
       streamLink: streamLink,
       isActive: true
     };
-    
+
     if (existingSlotIndex >= 0) {
       // Update existing slot
       user.streamSchedule[existingSlotIndex] = {
@@ -431,13 +492,13 @@ router.post('/:id/stream-schedule', requireAuth(), async (req, res) => {
       // Add new slot
       user.streamSchedule.push(newSlot);
     }
-    
+
     await user.save();
-    
-    res.json({ 
+
+    res.json({
       message: 'Stream schedule updated successfully',
       slot: newSlot,
-      success: true 
+      success: true
     });
   } catch (error) {
     console.error('Error updating stream schedule:', error);
@@ -449,7 +510,7 @@ router.post('/:id/stream-schedule', requireAuth(), async (req, res) => {
 router.delete('/:id/stream-schedule/:dayOfWeek', requireAuth(), async (req, res) => {
   try {
     const { id, dayOfWeek } = req.params;
-    
+
     // Validate user authentication
     const userId = req.auth?.userId || req.auth?.user?.id;
     let user;
@@ -467,14 +528,14 @@ router.delete('/:id/stream-schedule/:dayOfWeek', requireAuth(), async (req, res)
     if (user.clerkId !== userId && String(user._id) !== userId) {
       return res.status(403).json({ message: 'Unauthorized' });
     }
-    
+
     // Remove slot for the specified day
     user.streamSchedule = user.streamSchedule.filter(slot => slot.dayOfWeek !== dayOfWeek);
     await user.save();
-    
-    res.json({ 
+
+    res.json({
       message: 'Stream schedule slot deleted successfully',
-      success: true 
+      success: true
     });
   } catch (error) {
     console.error('Error deleting stream schedule slot:', error);
