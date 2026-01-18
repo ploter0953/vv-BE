@@ -1178,10 +1178,13 @@ app.post('/api/upload/image', requireAuth(), upload.single('image'), async (req,
     }
 
 
+
     // Xác định folder theo query param type
-    let folder = 'vtuberverse/commission';
-    if (req.query.type === 'avatar' || req.query.type === 'banner') {
-      folder = 'vtuberverse/users';
+    let folder = 'projectvtuber/commissions';
+    if (req.query.type === 'avatar') {
+      folder = 'projectvtuber/users/avatars';
+    } else if (req.query.type === 'banner') {
+      folder = 'projectvtuber/users/banners';
     }
 
     // Upload to Cloudinary using stream (file.path từ diskStorage)
@@ -1392,7 +1395,7 @@ app.post('/api/upload/media', uploadRateLimiter, (req, res, next) => {
     // Xác định folder theo query param type
     let folder = 'projectvtuber/commissions'; // Default for commission images
     if (req.query.type === 'avatar') {
-      folder = 'projectvtuber/users/avatar';
+      folder = 'projectvtuber/users/avatars';
     } else if (req.query.type === 'banner') {
       folder = 'projectvtuber/users/banners';
     }
