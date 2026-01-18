@@ -1177,9 +1177,6 @@ app.post('/api/upload/image', requireAuth(), upload.single('image'), async (req,
       return res.status(400).json({ error: 'Không có file được upload' });
     }
 
-    // Convert buffer to base64
-    const b64 = Buffer.from(req.file.buffer).toString('base64');
-    const dataURI = `data:${req.file.mimetype};base64,${b64}`;
 
     // Xác định folder theo query param type
     let folder = 'vtuberverse/commission';
@@ -1187,14 +1184,31 @@ app.post('/api/upload/image', requireAuth(), upload.single('image'), async (req,
       folder = 'vtuberverse/users';
     }
 
-    // Upload to Cloudinary
-    const result = await cloudinary.uploader.upload(dataURI, {
-      folder,
-      resource_type: 'auto',
-      transformation: [
-        { quality: 'auto', fetch_format: 'auto' }
-      ]
+    // Upload to Cloudinary using stream (file.path từ diskStorage)
+    const result = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder,
+          resource_type: 'auto',
+          transformation: [
+            { quality: 'auto', fetch_format: 'auto' }
+          ]
+        },
+        (error, result) => {
+          if (error) {
+            reject(error);
+          } else {
+            resolve(result);
+          }
+        }
+      );
+
+      // Pipe file từ disk to Cloudinary
+      fs.createReadStream(req.file.path).pipe(uploadStream);
     });
+
+    // Clean up temporary file
+    fs.unlinkSync(req.file.path);
 
     res.json({
       success: true,
@@ -1204,8 +1218,12 @@ app.post('/api/upload/image', requireAuth(), upload.single('image'), async (req,
       height: result.height
     });
   } catch (error) {
+    // Clean up temporary file in case of error
+    if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
     console.error('Upload error:', error);
-    res.status(500).json({ error: 'Lỗi khi upload hình ảnh' });
+    res.status(500).json({ error: 'Lỗi khi upload hình ảnh: ' + error.message });
   }
 });
 
@@ -1217,22 +1235,38 @@ app.post('/api/upload/images', requireAuth(), upload.array('images', 10), async 
     }
 
     // Xác định folder theo query param type
-    let folder = 'vtuberverse/commission';
-    if (req.query.type === 'avatar' || req.query.type === 'banner') {
-      folder = 'vtuberverse/users';
+    let folder = 'projectvtuber/commissions'; // Default for commission images
+    if (req.query.type === 'avatar') {
+      folder = 'projectvtuber/users/avatars';
+    } else if (req.query.type === 'banner') {
+      folder = 'projectvtuber/users/banners';
     }
 
     const uploadPromises = req.files.map(async (file) => {
-      const b64 = Buffer.from(file.buffer).toString('base64');
-      const dataURI = `data:${file.mimetype};base64,${b64}`;
+      const result = await new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          {
+            folder,
+            resource_type: 'auto',
+            transformation: [
+              { quality: 'auto', fetch_format: 'auto' }
+            ]
+          },
+          (error, result) => {
+            if (error) {
+              reject(error);
+            } else {
+              resolve(result);
+            }
+          }
+        );
 
-      const result = await cloudinary.uploader.upload(dataURI, {
-        folder,
-        resource_type: 'auto',
-        transformation: [
-          { quality: 'auto', fetch_format: 'auto' }
-        ]
+        // Pipe file từ disk to Cloudinary
+        fs.createReadStream(file.path).pipe(uploadStream);
       });
+
+      // Clean up temporary file
+      fs.unlinkSync(file.path);
 
       return {
         url: result.secure_url,
@@ -1249,8 +1283,16 @@ app.post('/api/upload/images', requireAuth(), upload.array('images', 10), async 
       images: results
     });
   } catch (error) {
+    // Clean up temporary files in case of error
+    if (req.files) {
+      req.files.forEach(file => {
+        if (file.path && fs.existsSync(file.path)) {
+          fs.unlinkSync(file.path);
+        }
+      });
+    }
     console.error('Upload error:', error);
-    res.status(500).json({ error: 'Lỗi khi upload hình ảnh' });
+    res.status(500).json({ error: 'Lỗi khi upload hình ảnh: ' + error.message });
   }
 });
 
@@ -1348,9 +1390,11 @@ app.post('/api/upload/media', uploadRateLimiter, (req, res, next) => {
     const resourceType = req.file.mimetype.startsWith('video/') ? 'video' : 'image';
 
     // Xác định folder theo query param type
-    let folder = 'vtuberverse/commission';
-    if (req.query.type === 'avatar' || req.query.type === 'banner') {
-      folder = 'vtuberverse/users';
+    let folder = 'projectvtuber/commissions'; // Default for commission images
+    if (req.query.type === 'avatar') {
+      folder = 'projectvtuber/users/avatar';
+    } else if (req.query.type === 'banner') {
+      folder = 'projectvtuber/users/banners';
     }
 
     // Upload to Cloudinary with stream upload for better performance
