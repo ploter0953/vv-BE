@@ -230,12 +230,16 @@ router.get('/:id', async (req, res) => {
 });
 
 // Update user profile
-router.put('/:id', requireAuth(), async (req, res) => {
+router.put('/:id', (req, res, next) => {
+  console.log('[UPDATE PROFILE] ===== PUT /:id route MATCHED (before auth) =====');
+  console.log('[UPDATE PROFILE] ID param:', req.params.id);
+  next();
+}, requireAuth(), async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = req.body;
 
-    console.log('[UPDATE PROFILE] ===== PUT /:id route hit =====');
+    console.log('[UPDATE PROFILE] ===== PUT /:id route hit (after auth) =====');
     console.log('[UPDATE PROFILE] Request params:', { id });
     console.log('[UPDATE PROFILE] Request auth:', { userId: req.auth?.userId });
     console.log('[UPDATE PROFILE] Request body keys:', Object.keys(updateData));
