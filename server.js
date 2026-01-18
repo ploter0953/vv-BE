@@ -383,6 +383,16 @@ app.post('/webhook/casso', (req, res, next) => {
 // Apply origin validation middleware to all API routes except uploads
 app.use('/api', (req, res, next) => {
 
+  // Log all requests to /api/users for debugging
+  if (req.path.startsWith('/users')) {
+    console.log('[ORIGIN VALIDATION] Request to /api/users:', {
+      method: req.method,
+      path: req.path,
+      origin: req.headers.origin,
+      referer: req.headers.referer
+    });
+  }
+
   // Skip origin validation for OPTIONS requests (preflight)
   if (req.method === 'OPTIONS') {
     return next();
@@ -422,7 +432,7 @@ app.use('/api', (req, res, next) => {
 
   // Block requests with no origin for non-upload endpoints
   if (!origin) {
-    console.log('No origin header - BLOCKING request (direct API access not allowed)');
+    console.log('[ORIGIN VALIDATION] BLOCKING - No origin header:', req.method, req.path);
     return res.status(403).json({
       error: 'Truy cập trực tiếp API không được phép',
       message: 'Vui lòng truy cập từ domain chính thức: https://www.projectvtuber.com',
@@ -432,10 +442,12 @@ app.use('/api', (req, res, next) => {
 
   // Check if origin is allowed
   if (allowedOrigins.includes(origin)) {
+    console.log('[ORIGIN VALIDATION] ALLOWED - Origin accepted:', origin);
     return next();
   }
 
   // Block unauthorized origin
+  console.log('[ORIGIN VALIDATION] BLOCKING - Unauthorized origin:', origin);
   return res.status(403).json({
     error: 'Truy cập không được phép từ domain này',
     message: 'Vui lòng truy cập từ domain chính thức: https://www.projectvtuber.com',
