@@ -1177,7 +1177,12 @@ app.post('/api/upload/image', requireAuth(), upload.single('image'), async (req,
       return res.status(400).json({ error: 'Không có file được upload' });
     }
 
-
+    console.log('[UPLOAD IMAGE] Starting upload:', {
+      filename: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size,
+      type: req.query.type
+    });
 
     // Xác định folder theo query param type
     let folder = 'projectvtuber/commissions';
@@ -1186,6 +1191,8 @@ app.post('/api/upload/image', requireAuth(), upload.single('image'), async (req,
     } else if (req.query.type === 'banner') {
       folder = 'projectvtuber/users/banners';
     }
+
+    console.log('[UPLOAD IMAGE] Target Cloudinary folder:', folder);
 
     // Upload to Cloudinary using stream (file.path từ diskStorage)
     const result = await new Promise((resolve, reject) => {
@@ -1213,6 +1220,14 @@ app.post('/api/upload/image', requireAuth(), upload.single('image'), async (req,
     // Clean up temporary file
     fs.unlinkSync(req.file.path);
 
+    console.log('[UPLOAD IMAGE] ✅ Upload successful to Cloudinary:', {
+      url: result.secure_url,
+      public_id: result.public_id,
+      folder: folder,
+      width: result.width,
+      height: result.height
+    });
+
     res.json({
       success: true,
       url: result.secure_url,
@@ -1225,7 +1240,12 @@ app.post('/api/upload/image', requireAuth(), upload.single('image'), async (req,
     if (req.file && req.file.path && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
-    console.error('Upload error:', error);
+    console.error('[UPLOAD IMAGE] ❌ Upload failed:', {
+      error: error.message,
+      stack: error.stack,
+      type: req.query.type,
+      filename: req.file?.originalname
+    });
     res.status(500).json({ error: 'Lỗi khi upload hình ảnh: ' + error.message });
   }
 });
