@@ -809,78 +809,8 @@ app.get('/api/users/:id', async (req, res) => {
   }
 });
 
-// Update user profile
-app.put('/api/users/:id', requireAuth(), async (req, res) => {
-  const userId = req.params.id;
-  const { avatar, bio, facebook, zalo, phone, website, profile_email, vtuber_description, artist_description, description, youtube, twitch, tiktok } = req.body;
-
-
-
-  // Tìm user theo _id hoặc clerkId
-  let user = null;
-  try {
-    user = await User.findById(userId);
-  } catch (e) {
-    // Nếu userId không phải ObjectId, bỏ qua lỗi
-  }
-  if (!user) {
-    user = await User.findOne({ clerkId: userId });
-  }
-  if (!user) {
-    console.log('User not found:', userId);
-    return res.status(404).json({ error: 'Người dùng không tồn tại' });
-  }
-
-  // Cho phép cập nhật nếu user._id == req.auth.userId hoặc user.clerkId == req.auth.userId
-  if (user._id.toString() !== req.auth.userId && user.clerkId !== req.auth.userId) {
-    console.log('Permission denied: userId', userId, 'userFromToken', req.auth.userId);
-    return res.status(403).json({ error: 'Không có quyền cập nhật profile này' });
-  }
-
-  try {
-    // Validate bio length (max 50 characters)
-    if (bio && bio.length > 50) {
-      return res.status(400).json({ error: 'Bio không được vượt quá 50 ký tự' });
-    }
-
-    // Update user fields
-    const updateData = {
-      avatar: avatar || user.avatar,
-      banner: req.body.banner || user.banner,
-      bio: bio || user.bio,
-      description: description || user.description,
-      facebook: facebook || user.facebook,
-      zalo: zalo || user.zalo,
-      phone: phone || user.phone,
-      website: website || user.website,
-      profile_email: profile_email || user.profile_email,
-      vtuber_description: vtuber_description || user.vtuber_description,
-      artist_description: artist_description || user.artist_description,
-      youtube: youtube || user.youtube,
-      twitch: twitch || user.twitch,
-      tiktok: tiktok || user.tiktok,
-      discord_id: req.body.discord_id || user.discord_id || '',
-      discord: req.body.discord || user.discord || ''
-    };
-
-    // Ghi log chi tiết trước khi cập nhật
-
-
-    const updatedUser = await User.findByIdAndUpdate(user._id, updateData, { new: true, runValidators: true });
-    if (!updatedUser) {
-      return res.status(404).json({ error: 'Người dùng không tồn tại' });
-    }
-
-    res.json({ message: 'Cập nhật profile thành công' });
-  } catch (error) {
-    console.error('[PROFILE UPDATE ERROR] Lỗi khi cập nhật profile cho user', userId, ':', error);
-    if (error.code === 11000) {
-      console.error('Unexpected duplicate key error:', error);
-      return res.status(500).json({ error: 'Lỗi database không mong muốn. Vui lòng thử lại.' });
-    }
-    res.status(500).json({ error: 'Lỗi khi cập nhật profile: ' + error.message });
-  }
-});
+// Update user profile - MOVED TO userRoutes.js
+// This duplicate route has been removed to avoid conflicts
 
 // Commission routes are now handled by commissionRoutes.js
 
