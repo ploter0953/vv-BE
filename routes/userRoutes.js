@@ -231,162 +231,163 @@ router.get('/:id', async (req, res) => {
 
 // Update user profile
 console.log('===== REGISTERING PUT /:id ROUTE =====');
-router.put('/:id', (req, res, next) => {
-  console.log('[UPDATE PROFILE] ===== PUT /:id route MATCHED (before auth) =====');
-  console.log('[UPDATE PROFILE] ID param:', req.params.id);
-  console.log('[UPDATE PROFILE] Auth header:', req.headers.authorization ? 'Present' : 'Missing');
-  next();
-}, requireAuth(), (err, req, res, next) => {
-  // Error handler for requireAuth
-  if (err) {
-    console.error('[UPDATE PROFILE] Auth middleware error:', err.message);
-    return res.status(401).json({ message: 'Authentication failed', error: err.message });
-  }
-  next();
-}, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const updateData = req.body;
+router.put('/:id',
+  (req, res, next) => {
+    console.log('[UPDATE PROFILE] ===== PUT /:id route MATCHED (before auth) =====');
+    console.log('[UPDATE PROFILE] ID param:', req.params.id);
+    console.log('[UPDATE PROFILE] Auth header:', req.headers.authorization ? 'Present' : 'Missing');
+    next();
+  },
+  requireAuth(),
+  (req, res, next) => {
+    console.log('[UPDATE PROFILE] ===== PASSED requireAuth() =====');
+    console.log('[UPDATE PROFILE] req.auth:', req.auth);
+    next();
+  },
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updateData = req.body;
 
-    console.log('[UPDATE PROFILE] ===== PUT /:id route hit (after auth) =====');
-    console.log('[UPDATE PROFILE] Request params:', { id });
-    console.log('[UPDATE PROFILE] Request auth:', { userId: req.auth?.userId });
-    console.log('[UPDATE PROFILE] Request body keys:', Object.keys(updateData));
+      console.log('[UPDATE PROFILE] ===== PUT /:id route hit (after auth) =====');
+      console.log('[UPDATE PROFILE] Request params:', { id });
+      console.log('[UPDATE PROFILE] Request auth:', { userId: req.auth?.userId });
+      console.log('[UPDATE PROFILE] Request body keys:', Object.keys(updateData));
 
-    // Validate user authentication
-    const userId = req.auth?.userId || req.auth?.user?.id;
-    if (!userId) {
-      console.log('[UPDATE PROFILE] Authentication failed - no userId');
-      return res.status(401).json({ message: 'User not authenticated' });
-    }
-
-    // Find user by ID or Clerk ID
-    let user;
-    console.log('Looking for user with ID:', id);
-    if (id.startsWith('user_')) {
-      user = await User.findOne({ clerkId: id });
-      console.log('Found user by clerkId:', user ? user._id : 'Not found');
-    } else if (mongoose.Types.ObjectId.isValid(id)) {
-      user = await User.findById(id);
-      console.log('Found user by ObjectId:', user ? user._id : 'Not found');
-    } else {
-      return res.status(400).json({ message: 'Invalid user id' });
-    }
-
-    if (!user) {
-      console.log('User not found for ID:', id);
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    // Check if user is updating their own profile
-    if (user.clerkId !== userId && String(user._id) !== userId) {
-      return res.status(403).json({ message: 'Unauthorized to update this profile' });
-    }
-
-    // Define allowed fields that can be updated
-    const allowedFields = [
-      'username', 'bio', 'avatar', 'banner', 'description', 'socialLinks',
-      'commissionRates', 'portfolio', 'badges', 'facebook', 'website',
-      'profile_email', 'vtuber_description', 'artist_description',
-      'twitch', 'youtube', 'tiktok', 'discord', 'discord_id'
-    ];
-
-    // Filter out non-allowed fields
-    const filteredData = {};
-    Object.keys(updateData).forEach(key => {
-      if (allowedFields.includes(key)) {
-        filteredData[key] = updateData[key];
+      // Validate user authentication
+      const userId = req.auth?.userId || req.auth?.user?.id;
+      if (!userId) {
+        console.log('[UPDATE PROFILE] Authentication failed - no userId');
+        return res.status(401).json({ message: 'User not authenticated' });
       }
-    });
 
+      // Find user by ID or Clerk ID
+      let user;
+      console.log('Looking for user with ID:', id);
+      if (id.startsWith('user_')) {
+        user = await User.findOne({ clerkId: id });
+        console.log('Found user by clerkId:', user ? user._id : 'Not found');
+      } else if (mongoose.Types.ObjectId.isValid(id)) {
+        user = await User.findById(id);
+        console.log('Found user by ObjectId:', user ? user._id : 'Not found');
+      } else {
+        return res.status(400).json({ message: 'Invalid user id' });
+      }
 
+      if (!user) {
+        console.log('User not found for ID:', id);
+        return res.status(404).json({ message: 'User not found' });
+      }
 
-    // Check if avatar is being updated and delete old avatar from Cloudinary
-    // Handle both cases: new avatar upload and avatar deletion (set to Clerk default)
-    if (user.avatar && user.avatar.includes('cloudinary.com') &&
-      filteredData.avatar !== user.avatar &&
-      !filteredData.avatar.includes('clerk.com')) {
-      try {
+      // Check if user is updating their own profile
+      if (user.clerkId !== userId && String(user._id) !== userId) {
+        return res.status(403).json({ message: 'Unauthorized to update this profile' });
+      }
 
-        const cloudinary = require('cloudinary').v2;
+      // Define allowed fields that can be updated
+      const allowedFields = [
+        'username', 'bio', 'avatar', 'banner', 'description', 'socialLinks',
+        'commissionRates', 'portfolio', 'badges', 'facebook', 'website',
+        'profile_email', 'vtuber_description', 'artist_description',
+        'twitch', 'youtube', 'tiktok', 'discord', 'discord_id'
+      ];
 
-        // Extract public ID from old avatar URL
-        const extractPublicIdFromCloudinaryUrl = (url) => {
-          if (!url || !url.includes('cloudinary.com')) return null;
-          try {
-            const urlParts = url.split('/');
-            const uploadIndex = urlParts.findIndex(part => part === 'upload');
-            if (uploadIndex !== -1 && uploadIndex + 2 < urlParts.length) {
-              const publicIdParts = urlParts.slice(uploadIndex + 2);
-              return publicIdParts.join('/').split('.')[0];
-            }
-          } catch (error) {
-            console.error('[UPDATE PROFILE] Error extracting public ID:', error);
-          }
-          return null;
-        };
-
-        const publicId = extractPublicIdFromCloudinaryUrl(user.avatar);
-        if (publicId) {
-          const result = await cloudinary.uploader.destroy(publicId);
+      // Filter out non-allowed fields
+      const filteredData = {};
+      Object.keys(updateData).forEach(key => {
+        if (allowedFields.includes(key)) {
+          filteredData[key] = updateData[key];
         }
-      } catch (error) {
-        console.error('[UPDATE PROFILE] Error deleting old avatar:', error);
-        // Continue with update even if delete fails
-      }
-    }
+      });
 
-    // Check if banner is being updated and delete old banner from Cloudinary
-    // Handle both cases: new banner upload and banner deletion (empty string)
-    if (user.banner && user.banner.includes('cloudinary.com') &&
-      filteredData.banner !== user.banner &&
-      filteredData.banner === '') {
-      try {
 
-        const cloudinary = require('cloudinary').v2;
 
-        // Extract public ID from old banner URL
-        const extractPublicIdFromCloudinaryUrl = (url) => {
-          if (!url || !url.includes('cloudinary.com')) return null;
-          try {
-            const urlParts = url.split('/');
-            const uploadIndex = urlParts.findIndex(part => part === 'upload');
-            if (uploadIndex !== -1 && uploadIndex + 2 < urlParts.length) {
-              const publicIdParts = urlParts.slice(uploadIndex + 2);
-              return publicIdParts.join('/').split('.')[0];
+      // Check if avatar is being updated and delete old avatar from Cloudinary
+      // Handle both cases: new avatar upload and avatar deletion (set to Clerk default)
+      if (user.avatar && user.avatar.includes('cloudinary.com') &&
+        filteredData.avatar !== user.avatar &&
+        !filteredData.avatar.includes('clerk.com')) {
+        try {
+
+          const cloudinary = require('cloudinary').v2;
+
+          // Extract public ID from old avatar URL
+          const extractPublicIdFromCloudinaryUrl = (url) => {
+            if (!url || !url.includes('cloudinary.com')) return null;
+            try {
+              const urlParts = url.split('/');
+              const uploadIndex = urlParts.findIndex(part => part === 'upload');
+              if (uploadIndex !== -1 && uploadIndex + 2 < urlParts.length) {
+                const publicIdParts = urlParts.slice(uploadIndex + 2);
+                return publicIdParts.join('/').split('.')[0];
+              }
+            } catch (error) {
+              console.error('[UPDATE PROFILE] Error extracting public ID:', error);
             }
-          } catch (error) {
-            console.error('[UPDATE PROFILE] Error extracting public ID:', error);
+            return null;
+          };
+
+          const publicId = extractPublicIdFromCloudinaryUrl(user.avatar);
+          if (publicId) {
+            const result = await cloudinary.uploader.destroy(publicId);
           }
-          return null;
-        };
-
-        const publicId = extractPublicIdFromCloudinaryUrl(user.banner);
-        if (publicId) {
-          const result = await cloudinary.uploader.destroy(publicId);
+        } catch (error) {
+          console.error('[UPDATE PROFILE] Error deleting old avatar:', error);
+          // Continue with update even if delete fails
         }
-      } catch (error) {
-        console.error('[UPDATE PROFILE] Error deleting old banner:', error);
-        // Continue with update even if delete fails
       }
+
+      // Check if banner is being updated and delete old banner from Cloudinary
+      // Handle both cases: new banner upload and banner deletion (empty string)
+      if (user.banner && user.banner.includes('cloudinary.com') &&
+        filteredData.banner !== user.banner &&
+        filteredData.banner === '') {
+        try {
+
+          const cloudinary = require('cloudinary').v2;
+
+          // Extract public ID from old banner URL
+          const extractPublicIdFromCloudinaryUrl = (url) => {
+            if (!url || !url.includes('cloudinary.com')) return null;
+            try {
+              const urlParts = url.split('/');
+              const uploadIndex = urlParts.findIndex(part => part === 'upload');
+              if (uploadIndex !== -1 && uploadIndex + 2 < urlParts.length) {
+                const publicIdParts = urlParts.slice(uploadIndex + 2);
+                return publicIdParts.join('/').split('.')[0];
+              }
+            } catch (error) {
+              console.error('[UPDATE PROFILE] Error extracting public ID:', error);
+            }
+            return null;
+          };
+
+          const publicId = extractPublicIdFromCloudinaryUrl(user.banner);
+          if (publicId) {
+            const result = await cloudinary.uploader.destroy(publicId);
+          }
+        } catch (error) {
+          console.error('[UPDATE PROFILE] Error deleting old banner:', error);
+          // Continue with update even if delete fails
+        }
+      }
+
+      // Update user
+      const updatedUser = await User.findByIdAndUpdate(
+        user._id,
+        { ...filteredData, updatedAt: new Date() },
+        { new: true, runValidators: true }
+      );
+
+      res.json({
+        message: 'Profile updated successfully',
+        user: updatedUser
+      });
+    } catch (error) {
+      console.error('Error updating user profile:', error);
+      res.status(500).json({ message: 'Error updating profile' });
     }
-
-    // Update user
-    const updatedUser = await User.findByIdAndUpdate(
-      user._id,
-      { ...filteredData, updatedAt: new Date() },
-      { new: true, runValidators: true }
-    );
-
-    res.json({
-      message: 'Profile updated successfully',
-      user: updatedUser
-    });
-  } catch (error) {
-    console.error('Error updating user profile:', error);
-    res.status(500).json({ message: 'Error updating profile' });
-  }
-});
+  });
 
 // Xóa user
 router.delete('/:id', async (req, res) => {
