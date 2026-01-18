@@ -2,6 +2,7 @@ const express = require('express');
 const User = require('../models/User');
 const mongoose = require('mongoose');
 const { ClerkExpressRequireAuth } = require('@clerk/clerk-sdk-node');
+const { requireAuth } = require('@clerk/express');
 const youtubeService = require('../services/youtubeService');
 
 const router = express.Router();
