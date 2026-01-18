@@ -230,11 +230,20 @@ router.get('/:id', async (req, res) => {
 });
 
 // Update user profile
+console.log('===== REGISTERING PUT /:id ROUTE =====');
 router.put('/:id', (req, res, next) => {
   console.log('[UPDATE PROFILE] ===== PUT /:id route MATCHED (before auth) =====');
   console.log('[UPDATE PROFILE] ID param:', req.params.id);
+  console.log('[UPDATE PROFILE] Auth header:', req.headers.authorization ? 'Present' : 'Missing');
   next();
-}, requireAuth(), async (req, res) => {
+}, requireAuth(), (err, req, res, next) => {
+  // Error handler for requireAuth
+  if (err) {
+    console.error('[UPDATE PROFILE] Auth middleware error:', err.message);
+    return res.status(401).json({ message: 'Authentication failed', error: err.message });
+  }
+  next();
+}, async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = req.body;
