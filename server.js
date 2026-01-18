@@ -578,6 +578,11 @@ app.use('/api', (req, res, next) => {
 
 app.use(express.json());
 
+// Mount userRoutes EARLY - MUST be before any individual /api/users/* routes
+// This ensures routes in userRoutes.js take precedence over scattered routes in server.js
+console.log('[SERVER] Mounting userRoutes at /api/users');
+app.use('/api/users', userRoutes);
+
 // Handle CORS preflight requests
 app.options('*', cors(corsOptions));
 
@@ -793,21 +798,8 @@ app.get('/api/users/vote', async (req, res) => {
   }
 });
 
-// Get user by ID
-app.get('/api/users/:id', async (req, res) => {
-  try {
-    const userId = req.params.id;
-    const user = await User.findById(userId);
-
-    if (!user) {
-      return res.status(404).json({ error: 'Người dùng không tồn tại' });
-    }
-
-    res.json({ user });
-  } catch (error) {
-    return res.status(500).json({ error: 'Lỗi server' });
-  }
-});
+// Get user by ID - MOVED TO userRoutes.js  
+// This duplicate route has been removed to avoid conflicts
 
 // Update user profile - MOVED TO userRoutes.js
 // This duplicate route has been removed to avoid conflicts
@@ -2103,8 +2095,7 @@ app.delete('/api/feedback/:id', requireAuth(), async (req, res) => {
   }
 });
 
-// Mount userRoutes (ưu tiên /clerk/:clerkId trước /:id)
-app.use('/api/users', require('./routes/userRoutes'));
+// userRoutes already mounted at line ~584 - DO NOT mount again here
 
 // Mount commissionRoutes
 app.use('/api/commissions', require('./routes/commissionRoutes'));
