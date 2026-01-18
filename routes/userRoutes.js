@@ -1,11 +1,12 @@
 const express = require('express');
 const User = require('../models/User');
 const mongoose = require('mongoose');
-const { requireAuth } = require('@clerk/express');
+const { requireAuth, clerkExpressWithAuth } = require('@clerk/express');
 const youtubeService = require('../services/youtubeService');
 
 const router = express.Router();
 
+console.log('===== USER ROUTES MODULE LOADED =====');
 // Get users - handles both search and getAll
 router.get('/', async (req, res) => {
   try {
@@ -232,16 +233,19 @@ router.get('/:id', async (req, res) => {
 // Update user profile
 console.log('===== REGISTERING PUT /:id ROUTE =====');
 router.put('/:id',
+  clerkExpressWithAuth(),  // Use clerkExpressWithAuth instead of requireAuth
   (req, res, next) => {
-    console.log('[UPDATE PROFILE] ===== PUT /:id route MATCHED (before auth) =====');
+    console.log('[UPDATE PROFILE] ===== PUT /:id route MATCHED (after clerk middleware) =====');
     console.log('[UPDATE PROFILE] ID param:', req.params.id);
-    console.log('[UPDATE PROFILE] Auth header:', req.headers.authorization ? 'Present' : 'Missing');
-    next();
-  },
-  requireAuth(),
-  (req, res, next) => {
-    console.log('[UPDATE PROFILE] ===== PASSED requireAuth() =====');
     console.log('[UPDATE PROFILE] req.auth:', req.auth);
+
+    // Check authentication
+    if (!req.auth?.userId) {
+      console.log('[UPDATE PROFILE] Not authenticated - no userId in req.auth');
+      return res.status(401).json({ message: 'User not authenticated' });
+    }
+
+    console.log('[UPDATE PROFILE] Authenticated user:', req.auth.userId);
     next();
   },
   async (req, res) => {
