@@ -62,7 +62,7 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({
+const upload = multer({ 
   storage: storage,
   limits: {
     fileSize: 5 * 1024 * 1024, // 5MB limit
@@ -78,7 +78,7 @@ const upload = multer({
 });
 
 // Multer configuration for media uploads (images + videos, up to 40MB)
-const mediaUpload = multer({
+const mediaUpload = multer({ 
   storage: storage,
   limits: {
     fileSize: 40 * 1024 * 1024, // 40MB limit per file
@@ -103,23 +103,23 @@ app.set('trust proxy', 1);
 // Redis configuration for rate limiting
 const getRedisConfig = () => {
   const redisUrl = process.env.REDIS_URL;
-
+  
   // If no Redis URL is provided, return null to use in-memory fallback
   if (!redisUrl) {
     console.log('No REDIS_URL provided, using in-memory rate limiting');
     return null;
   }
-
+  
   try {
     // Validate and parse Redis URL
     const url = new URL(redisUrl);
-
+    
     // Check if protocol is valid
     if (!['redis:', 'rediss:'].includes(url.protocol)) {
       console.log('Invalid REDIS_URL protocol, using in-memory rate limiting');
       return null;
     }
-
+    
     return {
       url: redisUrl,
       password: process.env.REDIS_PASSWORD || url.password,
@@ -227,23 +227,23 @@ const UPLOAD_RATE_WINDOW = 60 * 60 * 1000; // 1 hour
 function checkUploadRateLimit(userId) {
   const now = Date.now();
   const userKey = `upload_${userId}`;
-
+  
   if (!uploadRateLimit.has(userKey)) {
     uploadRateLimit.set(userKey, { count: 1, resetTime: now + UPLOAD_RATE_WINDOW });
     return true;
   }
-
+  
   const userLimit = uploadRateLimit.get(userKey);
-
+  
   if (now > userLimit.resetTime) {
     uploadRateLimit.set(userKey, { count: 1, resetTime: now + UPLOAD_RATE_WINDOW });
     return true;
   }
-
+  
   if (userLimit.count >= UPLOAD_RATE_LIMIT) {
     return false;
   }
-
+  
   userLimit.count++;
   return true;
 }
@@ -269,7 +269,7 @@ const getAllowedOrigins = () => {
     'http://localhost:5173', // Vite dev server
     'http://localhost:3000'  // React dev server
   ];
-
+  
   return allowedOrigins;
 };
 
@@ -277,10 +277,10 @@ const getAllowedOrigins = () => {
 const validateOrigin = (req, res, next) => {
   const origin = req.headers.origin;
   const allowedOrigins = getAllowedOrigins();
-
+  
   // Log origin for debugging
-
-
+  
+  
   // Block requests with no origin (direct API access, Postman, curl, etc.)
   if (!origin) {
     return res.status(403).json({
@@ -289,12 +289,12 @@ const validateOrigin = (req, res, next) => {
       allowedOrigins: process.env.NODE_ENV === 'development' ? allowedOrigins : undefined
     });
   }
-
+  
   // Check if origin is allowed
   if (allowedOrigins.includes(origin)) {
     return next();
   }
-
+  
   // Block unauthorized origin
   return res.status(403).json({
     error: 'Truy cập không được phép từ domain này',
@@ -328,18 +328,18 @@ app.use((req, res, next) => {
 const corsOptions = {
   origin: function (origin, callback) {
     const allowedOrigins = getAllowedOrigins();
-
+    
     // Allow requests with no origin ONLY for upload endpoints (needed for some browsers/networks)
     if (!origin) {
       // We'll handle this case in the upload-specific middleware
       return callback(null, true);
     }
-
+    
     // Check if origin is allowed
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
-
+    
     // Block unauthorized origin
     return callback(new Error('Truy cập không được phép từ domain này'), false);
   },
@@ -374,7 +374,7 @@ app.post('/webhook/casso', (req, res, next) => {
   console.log('IP:', req.ip);
   console.log('User-Agent:', req.headers['user-agent']);
   console.log('================================');
-
+  
   next();
 }, require('./donate/xulinaptien'));
 
@@ -382,32 +382,22 @@ app.post('/webhook/casso', (req, res, next) => {
 
 // Apply origin validation middleware to all API routes except uploads
 app.use('/api', (req, res, next) => {
-
-  // Log all requests to /api/users for debugging
-  if (req.path.startsWith('/users')) {
-    console.log('[ORIGIN VALIDATION] Request to /api/users:', {
-      method: req.method,
-      path: req.path,
-      origin: req.headers.origin,
-      referer: req.headers.referer
-    });
-  }
-
+  
   // Skip origin validation for OPTIONS requests (preflight)
   if (req.method === 'OPTIONS') {
     return next();
   }
-
+  
   // For upload endpoints, apply selective no-origin validation
   if (req.path.startsWith('/upload/')) {
     const origin = req.headers.origin;
-
+    
     // For upload endpoints, only allow no-origin if it's from legitimate sources
     if (!origin) {
       // Still require authentication - no free access
       return next();
     }
-
+    
     // If there is an origin, it must be from allowed domains
     const allowedOrigins = getAllowedOrigins();
     if (!allowedOrigins.includes(origin)) {
@@ -417,37 +407,35 @@ app.use('/api', (req, res, next) => {
         allowedOrigins: process.env.NODE_ENV === 'development' ? allowedOrigins : undefined
       });
     }
-
+    
     return next();
   }
-
-  // For webhook endpoints, skip origin validation (Casso, Clerk, etc.)
-  if (req.path.startsWith('/casso-webhook') || req.path.includes('/clerk-sync')) {
+  
+  // For webhook endpoints, skip origin validation (Casso, etc.)
+  if (req.path.startsWith('/casso-webhook')) {
     return next();
   }
-
+  
   // For non-upload endpoints, apply strict origin validation
   const origin = req.headers.origin;
   const allowedOrigins = getAllowedOrigins();
-
+  
   // Block requests with no origin for non-upload endpoints
   if (!origin) {
-    console.log('[ORIGIN VALIDATION] BLOCKING - No origin header:', req.method, req.path);
+    console.log('No origin header - BLOCKING request (direct API access not allowed)');
     return res.status(403).json({
       error: 'Truy cập trực tiếp API không được phép',
       message: 'Vui lòng truy cập từ domain chính thức: https://www.projectvtuber.com',
       allowedOrigins: process.env.NODE_ENV === 'development' ? allowedOrigins : undefined
     });
   }
-
+  
   // Check if origin is allowed
   if (allowedOrigins.includes(origin)) {
-    console.log('[ORIGIN VALIDATION] ALLOWED - Origin accepted:', origin);
     return next();
   }
-
+  
   // Block unauthorized origin
-  console.log('[ORIGIN VALIDATION] BLOCKING - Unauthorized origin:', origin);
   return res.status(403).json({
     error: 'Truy cập không được phép từ domain này',
     message: 'Vui lòng truy cập từ domain chính thức: https://www.projectvtuber.com',
@@ -460,18 +448,18 @@ app.use('/api', (req, res, next) => {
   // For upload endpoints, apply selective referer validation
   if (req.path.startsWith('/upload/')) {
     const referer = req.headers.referer;
-
+    
     // Skip referer check for OPTIONS requests (preflight)
     if (req.method === 'OPTIONS') {
       return next();
     }
-
+    
     // If there's a referer, it must be from allowed domain
     if (referer) {
       const allowedOrigins = getAllowedOrigins();
       const refererUrl = new URL(referer);
       const refererOrigin = refererUrl.origin;
-
+      
       if (!allowedOrigins.includes(refererOrigin)) {
         return res.status(403).json({
           error: 'Truy cập không được phép từ domain này',
@@ -479,28 +467,28 @@ app.use('/api', (req, res, next) => {
         });
       }
     }
-
+    
     return next();
   }
-
+  
   const referer = req.headers.referer;
   const allowedOrigins = getAllowedOrigins();
-
+  
   // Skip referer check for OPTIONS requests (preflight)
   if (req.method === 'OPTIONS') {
     return next();
   }
-
-  // For webhook endpoints, skip referer validation (Casso, Clerk, etc.)
-  if (req.path.startsWith('/casso-webhook') || req.path.includes('/clerk-sync')) {
-    return next();
-  }
-
+  
   // For webhook endpoints, skip referer validation (Casso, etc.)
-  if (req.path.startsWith('/casso-webhook') || req.path.includes('/clerk-sync')) {
+  if (req.path.startsWith('/casso-webhook')) {
     return next();
   }
-
+  
+  // For webhook endpoints, skip referer validation (Casso, etc.)
+  if (req.path.startsWith('/casso-webhook')) {
+    return next();
+  }
+  
   // For non-upload endpoints, check referer
   // Block requests without referer (direct API access)
   if (!referer) {
@@ -509,12 +497,12 @@ app.use('/api', (req, res, next) => {
       message: 'Vui lòng truy cập từ domain chính thức: https://www.projectvtuber.com'
     });
   }
-
+  
   // Check if referer is from allowed domain
   try {
     const refererUrl = new URL(referer);
     const refererOrigin = refererUrl.origin;
-
+    
     if (!allowedOrigins.includes(refererOrigin)) {
       return res.status(403).json({
         error: 'Truy cập không được phép từ domain này',
@@ -538,13 +526,13 @@ app.use('/api', (req, res, next) => {
     console.log('Skipping user-agent validation for upload endpoint:', req.path);
     return next();
   }
-
-  // Skip user-agent check for webhook endpoints (Casso, Clerk, etc.)
-  if (req.path.startsWith('/casso-webhook') || req.path.includes('/clerk-sync')) {
+  
+  // Skip user-agent check for webhook endpoints (Casso, etc.)
+  if (req.path.startsWith('/casso-webhook')) {
     console.log('Skipping user-agent validation for webhook endpoint:', req.path);
     return next();
   }
-
+  
   const userAgent = req.headers['user-agent'] || '';
   const blockedTools = [
     'postman',
@@ -556,15 +544,15 @@ app.use('/api', (req, res, next) => {
     'thunder client',
     'rest client'
   ];
-
+  
   // Skip for OPTIONS requests
   if (req.method === 'OPTIONS') {
     return next();
   }
-
+  
   const lowerUserAgent = userAgent.toLowerCase();
   const isBlockedTool = blockedTools.some(tool => lowerUserAgent.includes(tool));
-
+  
   if (isBlockedTool) {
     console.log(`Blocked API testing tool: ${userAgent}`);
     return res.status(403).json({
@@ -572,16 +560,11 @@ app.use('/api', (req, res, next) => {
       message: 'Vui lòng truy cập từ domain chính thức: https://www.projectvtuber.com'
     });
   }
-
+  
   next();
 });
 
 app.use(express.json());
-
-// Mount userRoutes EARLY - MUST be before any individual /api/users/* routes
-// This ensures routes in userRoutes.js take precedence over scattered routes in server.js
-console.log('[SERVER] Mounting userRoutes at /api/users');
-app.use('/api/users', userRoutes);
 
 // Handle CORS preflight requests
 app.options('*', cors(corsOptions));
@@ -616,7 +599,7 @@ async function fixProfileEmailIndex() {
     // Index might not exist, which is fine
     console.log('Profile_email unique index does not exist or already dropped');
   }
-
+  
   try {
     // Create a regular index (not unique) for better query performance
     await User.collection.createIndex({ profile_email: 1 });
@@ -632,25 +615,25 @@ fixProfileEmailIndex();
 // Helper function to extract public_id from Cloudinary URL
 function extractPublicIdFromCloudinaryUrl(url) {
   console.log('[EXTRACT PUBLIC ID] Processing URL:', url);
-
+  
   if (!url || !url.includes('cloudinary.com')) {
     console.log('[EXTRACT PUBLIC ID] Not a Cloudinary URL');
     return null;
   }
-
+  
   try {
     // Cloudinary URL format: https://res.cloudinary.com/cloud_name/image/upload/v1234567890/folder/filename.jpg
     const urlParts = url.split('/');
     console.log('[EXTRACT PUBLIC ID] URL parts:', urlParts);
-
+    
     const uploadIndex = urlParts.findIndex(part => part === 'upload');
     console.log('[EXTRACT PUBLIC ID] Upload index:', uploadIndex);
-
+    
     if (uploadIndex !== -1 && uploadIndex + 2 < urlParts.length) {
       // Get the part after 'upload' and version
       const publicIdParts = urlParts.slice(uploadIndex + 2);
       console.log('[EXTRACT PUBLIC ID] Public ID parts:', publicIdParts);
-
+      
       // Remove file extension
       const publicId = publicIdParts.join('/').split('.')[0];
       console.log('[EXTRACT PUBLIC ID] Final public ID:', publicId);
@@ -661,7 +644,7 @@ function extractPublicIdFromCloudinaryUrl(url) {
   } catch (error) {
     console.error('[EXTRACT PUBLIC ID] Error extracting public_id from URL:', error.message);
   }
-
+  
   console.log('[EXTRACT PUBLIC ID] Returning null');
   return null;
 }
@@ -672,26 +655,26 @@ function extractPublicIdFromCloudinaryUrl(url) {
 app.post('/api/users/fix-usernames', async (req, res) => {
   try {
     console.log('Fixing usernames for existing users...');
-
+    
     const users = await User.find({});
     let updatedCount = 0;
-
+    
     for (const user of users) {
       if (!user.username || user.username === '') {
         let newUsername = 'User';
         if (user.email) {
           newUsername = user.email.split('@')[0];
         }
-
+        
         await User.findByIdAndUpdate(user._id, { username: newUsername });
         updatedCount++;
         console.log(`Updated user ${user._id}: ${newUsername}`);
       }
     }
-
-    res.json({
+    
+    res.json({ 
       message: `Updated ${updatedCount} users with usernames`,
-      updatedCount
+      updatedCount 
     });
   } catch (error) {
     console.error('Error fixing usernames:', error);
@@ -701,12 +684,97 @@ app.post('/api/users/fix-usernames', async (req, res) => {
 
 
 
+// Clerk sync endpoint - unified endpoint for user sync
+app.post('/api/users/clerk-sync', requireAuth(), async (req, res) => {
+  try {
+    const { clerkId, email, username, avatar } = req.body;
+    
+    if (!clerkId || !email) {
+      return res.status(400).json({ error: 'clerkId và email là bắt buộc' });
+    }
+    
+    let user = await User.findOne({ clerkId });
+    
+    if (user) {
+      // Update existing user with Clerk data
+      console.log('[CLERK SYNC] Updating existing user');
+      const updateData = {
+        email: email || user.email,
+        username: username || user.username
+      };
+      
+      // Only update avatar if provided in request AND user doesn't have a custom avatar
+      const hasCustomAvatar = user.avatar && !user.avatar.includes('clerk.com');
+      const isClerkDefaultAvatar = user.avatar && user.avatar.includes('clerk.com');
+      
+      if (avatar && (!hasCustomAvatar || isClerkDefaultAvatar)) {
+        updateData.avatar = avatar;
+      }
+      
+      // Update user
+      Object.assign(user, updateData);
+      await user.save();
+      
+      return res.json({
+        user,
+        message: 'User đã tồn tại, cập nhật profile.'
+      });
+    }
+    
+    // Create new user
+    
+    // Generate username from email if not provided
+    let finalUsername = username;
+    if (!finalUsername && email) {
+      finalUsername = email.split('@')[0]; // Use part before @ as username
+    }
+    
+    const userData = {
+      clerkId,
+      email,
+      username: finalUsername || 'User',
+      avatar: avatar || '',
+      badges: ['member'],
+      bio: '',
+      description: '',
+      facebook: '',
+      website: '',
+      profile_email: '',
+      vtuber_description: '',
+      artist_description: '',
+      twitch: '',
+      youtube: '',
+      tiktok: '',
+      discord: '',
+      discord_id: '',
+      is_discord_verified: false,
+      balance: 0,
+      donated: 0,
+      donate_received: 0,
+      streamSchedule: []
+    };
+    
+    try {
+      user = await User.create(userData);
+      
+      return res.status(201).json({
+        user,
+        message: 'Tạo user mới thành công.'
+      });
+    } catch (createError) {
+      throw createError;
+    }
+  } catch (error) {
+    res.status(500).json({ error: 'Lỗi server khi đồng bộ user với Clerk.' });
+  }
+});
+
 // Health check endpoint with origin validation info
 app.get('/api/health', (req, res) => {
   const origin = req.headers.origin;
   const allowedOrigins = getAllowedOrigins();
   const isProduction = process.env.NODE_ENV === 'production';
-
+  
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
@@ -734,11 +802,11 @@ app.get('/api/health', (req, res) => {
 // Get users for voting (with optional badge filter) - MUST BE BEFORE /api/users/:id
 app.get('/api/users/vote', async (req, res) => {
   try {
-    // Silent vote endpoint
-
+      // Silent vote endpoint
+    
     const { badge } = req.query;
     let query = {};
-
+    
     // Always filter by badges - if no badge specified, show users with any badge
     if (badge) {
       if (badge === 'vtuber') {
@@ -750,31 +818,31 @@ app.get('/api/users/vote', async (req, res) => {
       // If no badge filter, only show users who have either 'vtuber' or 'verified' badge
       query.badges = { $in: ['vtuber', 'verified'] };
     }
-
+    
     console.log('MongoDB query object:', JSON.stringify(query));
     console.log('Mongoose connection readyState:', mongoose.connection.readyState);
     console.log('Mongoose connection name:', mongoose.connection.name);
     console.log('Mongoose connection host:', mongoose.connection.host);
-
+    
     if (!mongoose.connection.readyState) {
       console.error('Database not connected');
       return res.status(500).json({ error: 'Database connection error' });
     }
+    
 
-
-
+    
     const users = await User.find(query)
       .select('username avatar bio badges vtuber_description artist_description')
       .sort({ username: 1 });
-
+    
     res.json({ users });
-
+    
   } catch (error) {
     console.error('=== /api/users/vote ERROR ===');
     console.error('Error object:', error);
     console.error('Error type:', typeof error);
     console.error('Error constructor:', error.constructor.name);
-
+    
     if (error && error.stack) {
       console.error('Error stack:', error.stack);
     }
@@ -787,9 +855,9 @@ app.get('/api/users/vote', async (req, res) => {
     if (error && error.code) {
       console.error('Error code:', error.code);
     }
-
-    res.status(500).json({
-      error: 'Lỗi server',
+    
+    res.status(500).json({ 
+      error: 'Lỗi server', 
       details: error.message,
       name: error.name,
       code: error.code,
@@ -798,11 +866,94 @@ app.get('/api/users/vote', async (req, res) => {
   }
 });
 
-// Get user by ID - MOVED TO userRoutes.js  
-// This duplicate route has been removed to avoid conflicts
+// Get user by ID
+app.get('/api/users/:id', async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const user = await User.findById(userId);
+    
+    if (!user) {
+      return res.status(404).json({ error: 'Người dùng không tồn tại' });
+    }
 
-// Update user profile - MOVED TO userRoutes.js
-// This duplicate route has been removed to avoid conflicts
+    res.json({ user });
+  } catch (error) {
+    return res.status(500).json({ error: 'Lỗi server' });
+  }
+});
+
+// Update user profile
+app.put('/api/users/:id', requireAuth(), async (req, res) => {
+  const userId = req.params.id;
+  const { avatar, bio, facebook, zalo, phone, website, profile_email, vtuber_description, artist_description, description, youtube, twitch, tiktok } = req.body;
+
+
+
+  // Tìm user theo _id hoặc clerkId
+  let user = null;
+  try {
+    user = await User.findById(userId);
+  } catch (e) {
+    // Nếu userId không phải ObjectId, bỏ qua lỗi
+  }
+  if (!user) {
+    user = await User.findOne({ clerkId: userId });
+  }
+  if (!user) {
+    console.log('User not found:', userId);
+    return res.status(404).json({ error: 'Người dùng không tồn tại' });
+  }
+
+  // Cho phép cập nhật nếu user._id == req.auth.userId hoặc user.clerkId == req.auth.userId
+  if (user._id.toString() !== req.auth.userId && user.clerkId !== req.auth.userId) {
+    console.log('Permission denied: userId', userId, 'userFromToken', req.auth.userId);
+    return res.status(403).json({ error: 'Không có quyền cập nhật profile này' });
+  }
+
+  try {
+    // Validate bio length (max 50 characters)
+    if (bio && bio.length > 50) {
+      return res.status(400).json({ error: 'Bio không được vượt quá 50 ký tự' });
+    }
+
+    // Update user fields
+    const updateData = {
+      avatar: avatar || user.avatar,
+      banner: req.body.banner || user.banner,
+      bio: bio || user.bio,
+      description: description || user.description,
+      facebook: facebook || user.facebook,
+      zalo: zalo || user.zalo,
+      phone: phone || user.phone,
+      website: website || user.website,
+      profile_email: profile_email || user.profile_email,
+      vtuber_description: vtuber_description || user.vtuber_description,
+      artist_description: artist_description || user.artist_description,
+      youtube: youtube || user.youtube,
+      twitch: twitch || user.twitch,
+      tiktok: tiktok || user.tiktok,
+      discord_id: req.body.discord_id || user.discord_id || '',
+      discord: req.body.discord || user.discord || ''
+    };
+
+    // Ghi log chi tiết trước khi cập nhật
+
+
+    const updatedUser = await User.findByIdAndUpdate(user._id, updateData, { new: true, runValidators: true });
+    if (!updatedUser) {
+      return res.status(404).json({ error: 'Người dùng không tồn tại' });
+    }
+    
+    res.json({ message: 'Cập nhật profile thành công' });
+  } catch (error) {
+    console.error('[PROFILE UPDATE ERROR] Lỗi khi cập nhật profile cho user', userId, ':', error);
+    if (error.code === 11000) {
+      console.error('Unexpected duplicate key error:', error);
+      return res.status(500).json({ error: 'Lỗi database không mong muốn. Vui lòng thử lại.' });
+    }
+    res.status(500).json({ error: 'Lỗi khi cập nhật profile: ' + error.message });
+  }
+});
 
 // Commission routes are now handled by commissionRoutes.js
 
@@ -812,7 +963,7 @@ app.put('/api/orders/:id/confirm', requireAuth(), async (req, res) => {
   console.log('Order ID:', req.params.id);
   console.log('User ID:', req.auth.userId);
   console.log('Request body:', req.body);
-
+  
   try {
     const order = await Order.findById(req.params.id).populate('commission');
     console.log('Found order:', order ? {
@@ -820,42 +971,42 @@ app.put('/api/orders/:id/confirm', requireAuth(), async (req, res) => {
       status: order.status,
       buyer: order.buyer,
       commission_user: order.commission?.user
-    } : 'NOT FOUND');
+    } : 'NOT FOUND');   
     if (!order) {
       console.log('Order not found');
       return res.status(404).json({ error: 'Đơn hàng không tồn tại' });
     }
-
+    
     // Find user by clerkId to get ObjectId
     const currentUser = await User.findOne({ clerkId: req.auth.userId });
     if (!currentUser) {
       return res.status(401).json({ error: 'User not found' });
     }
-
+    
     // Check if user is the commission owner (artist)
     const isArtist = order.commission.user.toString() === currentUser._id.toString();
-
+    
     if (!isArtist) {
       return res.status(403).json({ error: 'Không có quyền xác nhận đơn hàng này' });
     }
-
+    
     console.log('Current order status:', order.status);
     if (order.status !== 'pending') {
       console.log('Order status is not pending - BAD REQUEST');
       return res.status(400).json({ error: 'Đơn hàng đã được xử lý' });
     }
-
+    
     order.status = 'confirmed';
     order.confirmed_at = new Date();
     await order.save();
     console.log('Order status updated to confirmed');
-
+    
     // Update commission status
     const commission = order.commission;
     commission.status = 'in_progress';
     await commission.save();
     console.log('Commission status updated to in_progress');
-
+    
     console.log('=== ARTIST CONFIRM ORDER SUCCESS ===');
     res.json({ message: 'Xác nhận đơn hàng thành công' });
   } catch (error) {
@@ -872,7 +1023,7 @@ app.put('/api/orders/:id/complete', requireAuth(), async (req, res) => {
   console.log('Order ID:', req.params.id);
   console.log('User ID:', req.auth.userId);
   console.log('Request body:', req.body);
-
+  
   try {
     const order = await Order.findById(req.params.id).populate('commission');
     console.log('Found order:', order ? {
@@ -880,40 +1031,40 @@ app.put('/api/orders/:id/complete', requireAuth(), async (req, res) => {
       status: order.status,
       buyer: order.buyer,
       commission_user: order.commission?.user
-    } : 'NOT FOUND');
+    } : 'NOT FOUND');   
     if (!order) {
       console.log('Order not found');
       return res.status(404).json({ error: 'Đơn hàng không tồn tại' });
     }
-
+    
     // Find user by clerkId to get ObjectId
     const currentUser = await User.findOne({ clerkId: req.auth.userId });
     if (!currentUser) {
       return res.status(401).json({ error: 'User not found' });
     }
-
+    
     // Check if user is the commission owner (artist)
     const isArtist = order.commission.user.toString() === currentUser._id.toString();
-
+    
     if (!isArtist) {
       return res.status(403).json({ error: 'Không có quyền hoàn thành đơn hàng này' });
     }
-
+    
     if (!['confirmed', 'customer_rejected', 'in_progress'].includes(order.status)) {
       return res.status(400).json({ error: 'Đơn hàng chưa được xác nhận hoặc không thể hoàn thành' });
     }
-
+    
     order.status = 'waiting_customer_confirmation';
     order.completed_at = new Date();
     await order.save();
     console.log('Order status updated to waiting_customer_confirmation');
-
+    
     // Update commission status
     const commission = order.commission;
     commission.status = 'waiting_customer_confirmation';
     await commission.save();
     console.log('Commission status updated to waiting_customer_confirmation');
-
+    
     console.log('=== ARTIST COMPLETE ORDER SUCCESS ===');
     res.json({ message: 'Đã đánh dấu hoàn thành. Chờ khách hàng xác nhận để hoàn tất đơn hàng.', requiresCustomerConfirmation: true });
   } catch (error) {
@@ -930,7 +1081,7 @@ app.put('/api/orders/:id/customer-confirm', requireAuth(), async (req, res) => {
   console.log('Order ID:', req.params.id);
   console.log('User ID:', req.auth.userId);
   console.log('Request body:', req.body);
-
+  
   try {
     const order = await Order.findById(req.params.id).populate('commission');
     console.log('Found order:', order ? {
@@ -938,34 +1089,34 @@ app.put('/api/orders/:id/customer-confirm', requireAuth(), async (req, res) => {
       status: order.status,
       buyer: order.buyer,
       commission_user: order.commission?.user
-    } : 'NOT FOUND');
+    } : 'NOT FOUND');   
     if (!order) {
       console.log('Order not found');
       return res.status(404).json({ error: 'Đơn hàng không tồn tại' });
     }
-
+    
     // Check if user is the buyer (customer)
     const isCustomer = order.buyer === req.auth.userId;
     console.log('Is user the customer?', isCustomer);
     console.log('Order buyer:', order.buyer);
     console.log('Request user ID:', req.auth.userId);
-
+    
     if (!isCustomer) {
       console.log('User is not the customer - FORBIDDEN');
       return res.status(403).json({ error: 'Không có quyền xác nhận đơn hàng này' });
     }
-
+    
     console.log('Current order status:', order.status);
     if (order.status !== 'waiting_customer_confirmation') {
       console.log('Order status not waiting for customer confirmation - BAD REQUEST');
       return res.status(400).json({ error: 'Đơn hàng chưa sẵn sàng để xác nhận' });
     }
-
+    
     order.status = 'completed';
     order.customer_confirmed = true;
     await order.save();
     console.log('Order status updated to completed');
-
+    
     // Add feedback if provided
     const { feedback } = req.body;
     if (feedback && feedback.trim()) {
@@ -984,13 +1135,13 @@ app.put('/api/orders/:id/customer-confirm', requireAuth(), async (req, res) => {
         }
       }
     }
-
+    
     // Update commission status
     const commission = order.commission;
     commission.status = 'completed';
     await commission.save();
     console.log('Commission status updated to completed');
-
+    
     console.log('=== CUSTOMER CONFIRM ORDER SUCCESS ===');
     res.json({ message: 'Xác nhận hoàn thành thành công. Đơn hàng đã hoàn tất!' });
   } catch (error) {
@@ -1007,7 +1158,7 @@ app.put('/api/orders/:id/cancel', requireAuth(), async (req, res) => {
   console.log('Order ID:', req.params.id);
   console.log('User ID:', req.auth.userId);
   console.log('Request body:', req.body);
-
+  
   try {
     const order = await Order.findById(req.params.id).populate('commission');
     console.log('Found order:', order ? {
@@ -1015,47 +1166,47 @@ app.put('/api/orders/:id/cancel', requireAuth(), async (req, res) => {
       status: order.status,
       buyer: order.buyer,
       commission_user: order.commission?.user
-    } : 'NOT FOUND');
+    } : 'NOT FOUND');   
     if (!order) {
       console.log('Order not found');
       return res.status(404).json({ error: 'Đơn hàng không tồn tại' });
     }
-
+    
     // Check if user is the buyer (customer)
     const isCustomer = order.buyer === req.auth.userId;
     console.log('Is user the customer?', isCustomer);
     console.log('Order buyer:', order.buyer);
     console.log('Request user ID:', req.auth.userId);
-
+    
     if (!isCustomer) {
       console.log('User is not the customer - FORBIDDEN');
       return res.status(403).json({ error: 'Không có quyền hủy đơn hàng này' });
     }
-
+    
     console.log('Current order status:', order.status);
     if (order.status !== 'pending') {
       console.log('Order status not pending - BAD REQUEST');
       return res.status(400).json({ error: 'Không thể hủy đơn hàng đã được xác nhận hoặc đang thực hiện' });
     }
-
+    
     order.status = 'cancelled';
     await order.save();
     console.log('Order status updated to cancelled');
-
+    
     // Nếu không còn active order nào thì mở lại commission
-    const activeOrders = await Order.countDocuments({
-      commission: order.commission._id,
-      status: { $in: ['pending', 'confirmed', 'waiting_customer_confirmation', 'customer_rejected'] }
+    const activeOrders = await Order.countDocuments({ 
+      commission: order.commission._id, 
+      status: { $in: ['pending', 'confirmed', 'waiting_customer_confirmation', 'customer_rejected'] } 
     });
     console.log('Active orders count:', activeOrders);
-
+    
     if (activeOrders === 0) {
       const commission = order.commission;
       commission.status = 'open';
       await commission.save();
       console.log('Commission status updated to open (no active orders)');
     }
-
+    
     console.log('=== CUSTOMER CANCEL ORDER SUCCESS ===');
     res.json({ message: 'Hủy đơn hàng thành công' });
   } catch (error) {
@@ -1072,52 +1223,52 @@ app.put('/api/orders/:id/reject', requireAuth(), async (req, res) => {
   console.log('Order ID:', req.params.id);
   console.log('User ID:', req.auth.userId);
   console.log('Request body:', req.body);
-
+  
   try {
     const { rejection_reason } = req.body;
     console.log('Rejection reason:', rejection_reason);
-
+    
     const order = await Order.findById(req.params.id).populate('commission');
     console.log('Found order:', order ? {
       id: order._id,
       status: order.status,
       buyer: order.buyer,
       commission_user: order.commission?.user
-    } : 'NOT FOUND');
+    } : 'NOT FOUND');   
     if (!order) {
       console.log('Order not found');
       return res.status(404).json({ error: 'Đơn hàng không tồn tại' });
     }
-
+    
     // Check if user is the buyer (customer)
     const isCustomer = order.buyer === req.auth.userId;
     console.log('Is user the customer?', isCustomer);
     console.log('Order buyer:', order.buyer);
     console.log('Request user ID:', req.auth.userId);
-
+    
     if (!isCustomer) {
       console.log('User is not the customer - FORBIDDEN');
       return res.status(403).json({ error: 'Không có quyền từ chối đơn hàng này' });
     }
-
+    
     console.log('Current order status:', order.status);
     if (order.status !== 'waiting_customer_confirmation') {
       console.log('Order status not waiting for customer confirmation - BAD REQUEST');
       return res.status(400).json({ error: 'Đơn hàng chưa sẵn sàng để từ chối' });
     }
-
+    
     order.status = 'customer_rejected';
     order.rejection_reason = rejection_reason || 'Khách hàng từ chối xác nhận hoàn thành';
     await order.save();
     console.log('Order status updated to customer_rejected');
     console.log('Rejection reason saved:', order.rejection_reason);
-
+    
     // Update commission status
     const commission = order.commission;
     commission.status = 'in_progress';
     await commission.save();
     console.log('Commission status updated to in_progress');
-
+    
     console.log('=== CUSTOMER REJECT ORDER SUCCESS ===');
     res.json({ message: 'Đã từ chối xác nhận hoàn thành. Artist sẽ được thông báo để chỉnh sửa.' });
   } catch (error) {
@@ -1134,36 +1285,36 @@ app.put('/api/orders/:id/reject', requireAuth(), async (req, res) => {
 app.put('/api/orders/auto-cancel-pending', async (req, res) => {
   try {
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-
+    
     // Find pending orders older than 7 days
     const pendingOrders = await Order.find({
       status: 'pending',
       created_at: { $lt: sevenDaysAgo }
     }).populate('commission_id');
-
+    
     let cancelledCount = 0;
-
+    
     for (const order of pendingOrders) {
       order.status = 'cancelled';
       await order.save();
       cancelledCount++;
-
+      
       // Check if commission should be reopened
-      const activeOrders = await Order.countDocuments({
-        commission_id: order.commission_id._id,
-        status: { $in: ['pending', 'confirmed', 'waiting_customer_confirmation', 'customer_rejected'] }
+      const activeOrders = await Order.countDocuments({ 
+        commission_id: order.commission_id._id, 
+        status: { $in: ['pending', 'confirmed', 'waiting_customer_confirmation', 'customer_rejected'] } 
       });
-
+      
       if (activeOrders === 0) {
         const commission = order.commission_id;
         commission.status = 'open';
         await commission.save();
       }
     }
-
-    res.json({
+    
+    res.json({ 
       message: `Đã tự động hủy ${cancelledCount} đơn hàng chờ xác nhận quá 7 ngày`,
-      cancelledCount
+      cancelledCount 
     });
   } catch (error) {
     res.status(500).json({ error: 'Lỗi server' });
@@ -1177,55 +1328,23 @@ app.post('/api/upload/image', requireAuth(), upload.single('image'), async (req,
       return res.status(400).json({ error: 'Không có file được upload' });
     }
 
-    console.log('[UPLOAD IMAGE] Starting upload:', {
-      filename: req.file.originalname,
-      mimetype: req.file.mimetype,
-      size: req.file.size,
-      type: req.query.type
-    });
+    // Convert buffer to base64
+    const b64 = Buffer.from(req.file.buffer).toString('base64');
+    const dataURI = `data:${req.file.mimetype};base64,${b64}`;
 
     // Xác định folder theo query param type
-    let folder = 'projectvtuber/commissions';
-    if (req.query.type === 'avatar') {
-      folder = 'projectvtuber/users/avatars';
-    } else if (req.query.type === 'banner') {
-      folder = 'projectvtuber/users/banners';
+    let folder = 'vtuberverse/commission';
+    if (req.query.type === 'avatar' || req.query.type === 'banner') {
+      folder = 'vtuberverse/users';
     }
 
-    console.log('[UPLOAD IMAGE] Target Cloudinary folder:', folder);
-
-    // Upload to Cloudinary using stream (file.path từ diskStorage)
-    const result = await new Promise((resolve, reject) => {
-      const uploadStream = cloudinary.uploader.upload_stream(
-        {
-          folder,
-          resource_type: 'auto',
-          transformation: [
-            { quality: 'auto', fetch_format: 'auto' }
-          ]
-        },
-        (error, result) => {
-          if (error) {
-            reject(error);
-          } else {
-            resolve(result);
-          }
-        }
-      );
-
-      // Pipe file từ disk to Cloudinary
-      fs.createReadStream(req.file.path).pipe(uploadStream);
-    });
-
-    // Clean up temporary file
-    fs.unlinkSync(req.file.path);
-
-    console.log('[UPLOAD IMAGE] ✅ Upload successful to Cloudinary:', {
-      url: result.secure_url,
-      public_id: result.public_id,
-      folder: folder,
-      width: result.width,
-      height: result.height
+    // Upload to Cloudinary
+    const result = await cloudinary.uploader.upload(dataURI, {
+      folder,
+      resource_type: 'auto',
+      transformation: [
+        { quality: 'auto', fetch_format: 'auto' }
+      ]
     });
 
     res.json({
@@ -1236,17 +1355,8 @@ app.post('/api/upload/image', requireAuth(), upload.single('image'), async (req,
       height: result.height
     });
   } catch (error) {
-    // Clean up temporary file in case of error
-    if (req.file && req.file.path && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
-    console.error('[UPLOAD IMAGE] ❌ Upload failed:', {
-      error: error.message,
-      stack: error.stack,
-      type: req.query.type,
-      filename: req.file?.originalname
-    });
-    res.status(500).json({ error: 'Lỗi khi upload hình ảnh: ' + error.message });
+    console.error('Upload error:', error);
+    res.status(500).json({ error: 'Lỗi khi upload hình ảnh' });
   }
 });
 
@@ -1258,38 +1368,22 @@ app.post('/api/upload/images', requireAuth(), upload.array('images', 10), async 
     }
 
     // Xác định folder theo query param type
-    let folder = 'projectvtuber/commissions'; // Default for commission images
-    if (req.query.type === 'avatar') {
-      folder = 'projectvtuber/users/avatars';
-    } else if (req.query.type === 'banner') {
-      folder = 'projectvtuber/users/banners';
+    let folder = 'vtuberverse/commission';
+    if (req.query.type === 'avatar' || req.query.type === 'banner') {
+      folder = 'vtuberverse/users';
     }
 
     const uploadPromises = req.files.map(async (file) => {
-      const result = await new Promise((resolve, reject) => {
-        const uploadStream = cloudinary.uploader.upload_stream(
-          {
-            folder,
-            resource_type: 'auto',
-            transformation: [
-              { quality: 'auto', fetch_format: 'auto' }
-            ]
-          },
-          (error, result) => {
-            if (error) {
-              reject(error);
-            } else {
-              resolve(result);
-            }
-          }
-        );
+      const b64 = Buffer.from(file.buffer).toString('base64');
+      const dataURI = `data:${file.mimetype};base64,${b64}`;
 
-        // Pipe file từ disk to Cloudinary
-        fs.createReadStream(file.path).pipe(uploadStream);
+      const result = await cloudinary.uploader.upload(dataURI, {
+        folder,
+        resource_type: 'auto',
+        transformation: [
+          { quality: 'auto', fetch_format: 'auto' }
+        ]
       });
-
-      // Clean up temporary file
-      fs.unlinkSync(file.path);
 
       return {
         url: result.secure_url,
@@ -1306,16 +1400,8 @@ app.post('/api/upload/images', requireAuth(), upload.array('images', 10), async 
       images: results
     });
   } catch (error) {
-    // Clean up temporary files in case of error
-    if (req.files) {
-      req.files.forEach(file => {
-        if (file.path && fs.existsSync(file.path)) {
-          fs.unlinkSync(file.path);
-        }
-      });
-    }
     console.error('Upload error:', error);
-    res.status(500).json({ error: 'Lỗi khi upload hình ảnh: ' + error.message });
+    res.status(500).json({ error: 'Lỗi khi upload hình ảnh' });
   }
 });
 
@@ -1325,31 +1411,31 @@ app.post('/api/upload/images', requireAuth(), upload.array('images', 10), async 
 
 // Upload media (image/video) to Cloudinary - up to 40MB
 app.post('/api/upload/media', uploadRateLimiter, (req, res, next) => {
-
+  
   // Additional security: Check for suspicious patterns
   const userAgent = req.headers['user-agent'] || '';
   const suspiciousPatterns = ['curl', 'wget', 'python-requests', 'postman'];
-  const isSuspicious = suspiciousPatterns.some(pattern =>
+  const isSuspicious = suspiciousPatterns.some(pattern => 
     userAgent.toLowerCase().includes(pattern.toLowerCase())
   );
-
+  
   if (isSuspicious && !req.headers.origin && !req.headers.referer) {
-    return res.status(403).json({
+    return res.status(403).json({ 
       error: 'Request không được phép',
       hint: 'Vui lòng sử dụng trình duyệt web'
     });
   }
-
+  
   // Apply requireAuth with custom error handling
   requireAuth()(req, res, (err) => {
     if (err) {
-      return res.status(401).json({
-        error: 'Authentication failed',
+      return res.status(401).json({ 
+        error: 'Authentication failed', 
         details: err.message,
         hint: 'Kiểm tra token Clerk'
       });
     }
-
+    
     // Apply Redis rate limiting
     if (!isRedisAvailable()) {
       // Fallback to in-memory rate limiting if Redis is not available
@@ -1362,7 +1448,7 @@ app.post('/api/upload/media', uploadRateLimiter, (req, res, next) => {
       }
     }
     // If Redis is ready, the uploadRateLimiter middleware will handle rate limiting
-
+    
     next();
   });
 }, (req, res, next) => {
@@ -1379,45 +1465,43 @@ app.post('/api/upload/media', uploadRateLimiter, (req, res, next) => {
     next();
   });
 }, async (req, res) => {
-
+  
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'Không có file được upload' });
     }
-
+    
     // Additional security: Validate file type more strictly
     const allowedImageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
     const allowedVideoTypes = ['video/mp4', 'video/webm', 'video/ogg', 'video/mov'];
     const allAllowedTypes = [...allowedImageTypes, ...allowedVideoTypes];
-
+    
     if (!allAllowedTypes.includes(req.file.mimetype)) {
-      return res.status(400).json({
+      return res.status(400).json({ 
         error: 'Loại file không được hỗ trợ',
         allowed: 'Chỉ chấp nhận: JPEG, PNG, WebP, GIF, MP4, WebM, OGG, MOV'
       });
     }
-
+    
     // Additional security: Check file size limits by type
     const maxImageSize = 5 * 1024 * 1024; // 5MB for images
     const maxVideoSize = 40 * 1024 * 1024; // 40MB for videos
-
+    
     if (req.file.mimetype.startsWith('image/') && req.file.size > maxImageSize) {
       return res.status(400).json({ error: 'Ảnh tối đa 5MB' });
     }
-
+    
     if (req.file.mimetype.startsWith('video/') && req.file.size > maxVideoSize) {
       return res.status(400).json({ error: 'Video tối đa 40MB' });
     }
 
     // Determine resource type
     const resourceType = req.file.mimetype.startsWith('video/') ? 'video' : 'image';
-
+    
     // Xác định folder theo query param type
-    let folder = 'projectvtuber/commissions'; // Default for commission images
-    if (req.query.type === 'avatar') {
-      folder = 'projectvtuber/users/avatars';
-    } else if (req.query.type === 'banner') {
-      folder = 'projectvtuber/users/banners';
+    let folder = 'vtuberverse/commission';
+    if (req.query.type === 'avatar' || req.query.type === 'banner') {
+      folder = 'vtuberverse/users';
     }
 
     // Upload to Cloudinary with stream upload for better performance
@@ -1479,17 +1563,17 @@ app.post('/api/upload/media', uploadRateLimiter, (req, res, next) => {
 
 // Upload multiple media files for commission (max 3 files, total 120MB)
 app.post('/api/upload/commission-media', uploadRateLimiter, (req, res, next) => {
-
+  
   // Apply requireAuth with custom error handling
   requireAuth()(req, res, (err) => {
     if (err) {
-      return res.status(401).json({
-        error: 'Authentication failed',
+      return res.status(401).json({ 
+        error: 'Authentication failed', 
         details: err.message,
         hint: 'Kiểm tra token Clerk'
       });
     }
-
+    
     // Apply Redis rate limiting
     if (!isRedisAvailable()) {
       if (!checkUploadRateLimit(req.auth.userId)) {
@@ -1500,7 +1584,7 @@ app.post('/api/upload/commission-media', uploadRateLimiter, (req, res, next) => 
         });
       }
     }
-
+    
     next();
   });
 }, (req, res, next) => {
@@ -1520,7 +1604,7 @@ app.post('/api/upload/commission-media', uploadRateLimiter, (req, res, next) => 
       }
     }
   });
-
+  
   commissionUpload.array('media', 3)(req, res, (err) => {
     if (err) {
       if (err.code === 'LIMIT_FILE_SIZE') {
@@ -1541,51 +1625,51 @@ app.post('/api/upload/commission-media', uploadRateLimiter, (req, res, next) => 
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ error: 'Không có file được upload' });
     }
-
+    
     if (req.files.length > 3) {
       return res.status(400).json({ error: 'Tối đa 3 file được phép upload' });
     }
-
+    
     // Calculate total size
     const totalSize = req.files.reduce((sum, file) => sum + file.size, 0);
     const maxTotalSize = 120 * 1024 * 1024; // 120MB total
-
+    
     if (totalSize > maxTotalSize) {
-      return res.status(400).json({
+      return res.status(400).json({ 
         error: 'Tổng kích thước file quá lớn',
         details: `Tổng: ${(totalSize / 1024 / 1024).toFixed(2)}MB, Tối đa: 120MB`
       });
     }
-
+    
     // Validate each file
     const allowedImageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
     const allowedVideoTypes = ['video/mp4', 'video/webm', 'video/ogg', 'video/mov'];
     const allAllowedTypes = [...allowedImageTypes, ...allowedVideoTypes];
-
+    
     for (const file of req.files) {
       if (!allAllowedTypes.includes(file.mimetype)) {
-        return res.status(400).json({
+        return res.status(400).json({ 
           error: 'Loại file không được hỗ trợ',
           allowed: 'Chỉ chấp nhận: JPEG, PNG, WebP, GIF, MP4, WebM, OGG, MOV'
         });
       }
-
+      
       const maxImageSize = 5 * 1024 * 1024; // 5MB for images
       const maxVideoSize = 40 * 1024 * 1024; // 40MB for videos
-
+      
       if (file.mimetype.startsWith('image/') && file.size > maxImageSize) {
         return res.status(400).json({ error: 'Ảnh tối đa 5MB' });
       }
-
+      
       if (file.mimetype.startsWith('video/') && file.size > maxVideoSize) {
         return res.status(400).json({ error: 'Video tối đa 40MB' });
       }
     }
-
+    
     // Upload all files to Cloudinary
     const uploadPromises = req.files.map(async (file) => {
       const resourceType = file.mimetype.startsWith('video/') ? 'video' : 'image';
-
+      
       const uploadOptions = {
         folder: 'vtuberverse/commission',
         resource_type: resourceType,
@@ -1632,16 +1716,16 @@ app.post('/api/upload/commission-media', uploadRateLimiter, (req, res, next) => 
         originalname: file.originalname
       };
     });
-
+    
     const results = await Promise.all(uploadPromises);
-
+    
     res.json({
       success: true,
       files: results,
       totalFiles: results.length,
       totalSize: results.reduce((sum, file) => sum + file.bytes, 0)
     });
-
+    
   } catch (error) {
     // Clean up temporary files in case of error
     if (req.files) {
@@ -1659,11 +1743,11 @@ app.post('/api/upload/commission-media', uploadRateLimiter, (req, res, next) => 
 app.delete('/api/upload/image/:public_id', requireAuth(), async (req, res) => {
   try {
     const { public_id } = req.params;
-
+    
     const result = await cloudinary.uploader.destroy(public_id, {
       resource_type: 'image'
     });
-
+    
     if (result.result === 'ok') {
       res.json({ success: true, message: 'Xóa hình ảnh thành công' });
     } else {
@@ -1678,11 +1762,11 @@ app.delete('/api/upload/image/:public_id', requireAuth(), async (req, res) => {
 app.delete('/api/upload/video/:public_id', requireAuth(), async (req, res) => {
   try {
     const { public_id } = req.params;
-
+    
     const result = await cloudinary.uploader.destroy(public_id, {
       resource_type: 'video'
     });
-
+    
     if (result.result === 'ok') {
       res.json({ success: true, message: 'Xóa video thành công' });
     } else {
@@ -1698,26 +1782,26 @@ app.delete('/api/upload/video/:public_id', requireAuth(), async (req, res) => {
 app.delete('/api/upload/image-by-url', requireAuth(), async (req, res) => {
   try {
     const { imageUrl } = req.body;
-
+    
     console.log('[DELETE IMAGE] Request to delete:', imageUrl);
-
+    
     if (!imageUrl) {
       console.log('[DELETE IMAGE] Error: No image URL provided');
       return res.status(400).json({ error: 'Image URL is required' });
     }
-
+    
     const publicId = extractPublicIdFromCloudinaryUrl(imageUrl);
     console.log('[DELETE IMAGE] Extracted public ID:', publicId);
-
+    
     if (!publicId) {
       console.log('[DELETE IMAGE] Error: Invalid Cloudinary URL');
       return res.status(400).json({ error: 'Invalid Cloudinary URL' });
     }
-
+    
     console.log('[DELETE IMAGE] Calling Cloudinary destroy for public ID:', publicId);
     const result = await cloudinary.uploader.destroy(publicId);
     console.log('[DELETE IMAGE] Cloudinary result:', result);
-
+    
     if (result.result === 'ok') {
       console.log('[DELETE IMAGE] Success: Image deleted from Cloudinary');
       res.json({ success: true, message: 'Xóa hình ảnh thành công', publicId });
@@ -1735,21 +1819,21 @@ app.delete('/api/upload/image-by-url', requireAuth(), async (req, res) => {
 app.delete('/api/upload/video-by-url', requireAuth(), async (req, res) => {
   try {
     const { videoUrl } = req.body;
-
+    
     if (!videoUrl) {
       return res.status(400).json({ error: 'Video URL is required' });
     }
-
+    
     const publicId = extractPublicIdFromCloudinaryUrl(videoUrl);
-
+    
     if (!publicId) {
       return res.status(400).json({ error: 'Invalid Cloudinary URL' });
     }
-
+    
     const result = await cloudinary.uploader.destroy(publicId, {
       resource_type: 'video'
     });
-
+    
     if (result.result === 'ok') {
       res.json({ success: true, message: 'Xóa video thành công', publicId });
     } else {
@@ -1775,7 +1859,7 @@ app.post('/api/vote/vtuber', requireAuth(), async (req, res) => {
     let votedUser = null;
     try {
       votedUser = await User.findById(voted_vtuber_id);
-    } catch (e) { }
+    } catch (e) {}
     if (!votedUser) {
       votedUser = await User.findOne({ clerkId: voted_vtuber_id });
     }
@@ -1844,7 +1928,7 @@ app.post('/api/vote/artist', requireAuth(), async (req, res) => {
     let votedUser = null;
     try {
       votedUser = await User.findById(voted_artist_id);
-    } catch (e) { }
+    } catch (e) {}
     if (!votedUser) {
       votedUser = await User.findOne({ clerkId: voted_artist_id });
     }
@@ -2030,7 +2114,7 @@ app.get('/api/spotlight/artists', async (req, res) => {
 app.get('/api/vote/status', requireAuth(), async (req, res) => {
   try {
     const voter_id = req.auth.userId;
-
+    
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
@@ -2092,7 +2176,7 @@ app.get('/api/vtubers', async (req, res) => {
 app.post('/api/feedback', async (req, res) => {
   try {
     const { name, email, subject, message } = req.body;
-
+    
     if (!name || !email || !subject || !message) {
       return res.status(400).json({ error: 'Tất cả các trường đều bắt buộc' });
     }
@@ -2120,7 +2204,7 @@ app.get('/api/feedback', requireAuth(), async (req, res) => {
   try {
     // Only admin can view all feedback
     const user = await User.findOne({ clerkId: req.auth.userId });
-
+    
     if (!user || user.email !== 'huynguyen86297@gmail.com') {
       return res.status(403).json({ error: 'Không có quyền truy cập' });
     }
@@ -2162,7 +2246,8 @@ app.delete('/api/feedback/:id', requireAuth(), async (req, res) => {
   }
 });
 
-// userRoutes already mounted at line ~584 - DO NOT mount again here
+// Mount userRoutes (ưu tiên /clerk/:clerkId trước /:id)
+app.use('/api/users', require('./routes/userRoutes'));
 
 // Mount commissionRoutes
 app.use('/api/commissions', require('./routes/commissionRoutes'));
@@ -2175,22 +2260,6 @@ app.use('/api/collabs', require('./routes/collabRoutes'));
 
 // Mount donateRoutes
 app.use('/api/donate', require('./routes/donateRoutes'));
-
-// Mount livestreamRoutes
-app.use('/api/livestreams', require('./routes/livestreamRoutes'));
-
-// Mount spotlight routes
-app.use('/api/spotlight', require('./routes/spotlightRoutes'));
-
-// Root path handler for health checks and Clerk SDK
-app.get('/', (req, res) => {
-  res.json({
-    status: 'ok',
-    message: 'Project VTuber API Server',
-    version: '1.0.0',
-    timestamp: new Date().toISOString()
-  });
-});
 
 // Mount Casso webhook route
 app.use('/api/casso-webhook', require('./donate/xulinaptien'));
@@ -2235,20 +2304,20 @@ const updateCollabStatuses = async () => {
 
   try {
     isUpdating = true;
-
+    
     const now = new Date();
-
+    
     // Helper function to calculate check interval based on time remaining
     const getCheckInterval = (scheduledStartTime) => {
       if (!scheduledStartTime) return 10 * 60 * 1000; // Default 10 minutes
-
+      
       const startTime = new Date(scheduledStartTime);
       const timeRemaining = startTime - now;
-
+      
       if (timeRemaining <= 0) return 5 * 60 * 1000; // Stream already started/ended, check every 5 minutes
-
+      
       const hoursRemaining = timeRemaining / (1000 * 60 * 60);
-
+      
       if (hoursRemaining > 24) {
         return 2 * 60 * 60 * 1000; // > 24 hours: check every 2 hours
       } else if (hoursRemaining >= 12) {
@@ -2259,36 +2328,36 @@ const updateCollabStatuses = async () => {
         return 5 * 60 * 1000; // < 1 hour: check every 5 minutes
       }
     };
-
+    
     // Get all collabs that need updating based on dynamic intervals
     const allCollabs = await Collab.find({
       status: { $in: ['open', 'setting_up', 'in_progress'] }
     }).limit(20);
-
+    
     // Filter collabs based on their check interval
     const collabsToUpdate = allCollabs.filter(collab => {
       const scheduledStartTime = collab.stream_info_1?.scheduledStartTime;
       const checkInterval = getCheckInterval(scheduledStartTime);
       const lastCheck = collab.lastStatusCheck || new Date(0);
       const timeSinceLastCheck = now - lastCheck;
-
+      
       return timeSinceLastCheck >= checkInterval;
     });
-
+    
     if (collabsToUpdate.length === 0) {
       return;
     }
-
+    
     // Process collabs in batches to avoid rate limiting
     const batchSize = 3;
     for (let i = 0; i < collabsToUpdate.length; i += batchSize) {
       const batch = collabsToUpdate.slice(i, i + batchSize);
-
+      
       await Promise.allSettled(batch.map(async (collab) => {
         try {
           const youtubeService = require('./services/youtubeService');
           const updateData = { lastStatusCheck: new Date() };
-
+          
           // Check each partner's YouTube link and update their stream info
           const partners = [
             { link: collab.youtube_link_1, field: 'stream_info_1' }, // Creator
@@ -2296,10 +2365,10 @@ const updateCollabStatuses = async () => {
             { link: collab.youtube_link_2, field: 'stream_info_2' }, // Partner 2
             { link: collab.youtube_link_3, field: 'stream_info_3' }  // Partner 3
           ];
-
+          
           let hasLiveStream = false;
           let hasWaitingRoom = false;
-
+          
           for (const partner of partners) {
             if (partner.link) {
               try {
@@ -2314,9 +2383,9 @@ const updateCollabStatuses = async () => {
                     const scheduledStartTime = collab.stream_info_1?.scheduledStartTime;
                     cacheTimeout = getCheckInterval(scheduledStartTime);
                   }
-
+                  
                   const streamStatus = await youtubeService.checkStreamStatus(videoId, cacheTimeout);
-
+                  
                   // Nếu là creator và collab đang open, kiểm tra hợp lệ
                   if (collab.status === 'open' && partner.field === 'stream_info_1') {
                     if (!streamStatus.isValid || (!streamStatus.isWaitingRoom && !streamStatus.isLive)) {
@@ -2328,7 +2397,7 @@ const updateCollabStatuses = async () => {
                       return;
                     }
                   }
-
+                  
                   // Update this partner's stream info
                   updateData[partner.field] = {
                     isLive: streamStatus.isLive,
@@ -2337,7 +2406,7 @@ const updateCollabStatuses = async () => {
                     thumbnail: streamStatus.thumbnail || '',
                     scheduledStartTime: streamStatus.scheduledStartTime || null
                   };
-
+                  
                   // Cập nhật time_remaining nếu đây là stream của creator (stream_info_1)
                   if (partner.field === 'stream_info_1' && streamStatus.scheduledStartTime) {
                     const now = new Date();
@@ -2345,7 +2414,7 @@ const updateCollabStatuses = async () => {
                     const time_remaining = scheduledStart.getTime() - now.getTime();
                     updateData.time_remaining = time_remaining > 0 ? time_remaining : null;
                   }
-
+                  
                   if (streamStatus.isValid && streamStatus.isLive) {
                     hasLiveStream = true;
                   } else if (streamStatus.isValid && streamStatus.isWaitingRoom) {
@@ -2357,14 +2426,14 @@ const updateCollabStatuses = async () => {
               }
             }
           }
-
+          
           // Update all stream info at once
           await Collab.findByIdAndUpdate(collab._id, updateData);
-
+          
           // Update status based on conditions
           const currentPartners = [collab.partner_2, collab.partner_3].filter(Boolean).length;
           const hasAtLeastOnePartner = currentPartners >= 1;
-
+          
           if (hasLiveStream) {
             if (hasAtLeastOnePartner) {
               await Collab.findByIdAndUpdate(collab._id, {
@@ -2398,7 +2467,7 @@ const updateCollabStatuses = async () => {
               const streamInfo = updateData[partner.field];
               return streamInfo && !streamInfo.isLive;
             });
-
+            
             if (allStreamsEnded) {
               await Collab.findByIdAndUpdate(collab._id, {
                 status: 'ended',
@@ -2411,41 +2480,41 @@ const updateCollabStatuses = async () => {
           console.error(`Error updating collab ${collab._id}:`, error.message);
         }
       }));
-
+      
       // Wait between batches to avoid rate limiting
       if (i + batchSize < collabsToUpdate.length) {
         await new Promise(resolve => setTimeout(resolve, 2000)); // 2 seconds delay
       }
     }
-
+    
     // Clean up ended collabs after 1 hour
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-
+    
     const endedCollabs = await Collab.find({
       status: 'ended',
       endedAt: { $lt: oneHourAgo }
     });
-
+    
     if (endedCollabs.length > 0) {
       await Collab.deleteMany({
         status: 'ended',
         endedAt: { $lt: oneHourAgo }
       });
     }
-
+    
     // Clean up cancelled collabs after 1 hour
     const cancelledCollabs = await Collab.find({
       status: 'cancelled',
       endedAt: { $lt: oneHourAgo }
     });
-
+    
     if (cancelledCollabs.length > 0) {
       await Collab.deleteMany({
         status: 'cancelled',
         endedAt: { $lt: oneHourAgo }
       });
     }
-
+    
   } catch (error) {
     console.error('Error in collab status update task:', error);
   } finally {
@@ -2460,21 +2529,21 @@ setInterval(updateCollabStatuses, 30000); // Every 30 seconds
 const resetStreamSchedules = async () => {
   try {
     console.log('Running stream schedule reset task...');
-
+    
     // Get current time in Vietnam timezone (UTC+7)
     const now = new Date();
     const vietnamTime = new Date(now.getTime() + (7 * 60 * 60 * 1000));
-
+    
     // Check if it's Monday 00:00
     if (vietnamTime.getDay() === 1 && vietnamTime.getHours() === 0 && vietnamTime.getMinutes() < 5) {
       console.log('Resetting all stream schedules...');
-
+      
       // Clear all stream schedules
       const result = await User.updateMany(
         { streamSchedule: { $exists: true, $ne: [] } },
         { $set: { streamSchedule: [] } }
       );
-
+      
       console.log(`Reset ${result.modifiedCount} users' stream schedules`);
     }
   } catch (error) {
@@ -2495,7 +2564,7 @@ async function initializeDonateSystem() {
     } catch (error) {
       console.log('Discord bot initialization skipped (no valid token configured)');
     }
-
+    
     // Start donation cleanup service
     try {
       await donationCleanupService.start();
@@ -2503,7 +2572,7 @@ async function initializeDonateSystem() {
     } catch (error) {
       console.log('Donation cleanup service initialization skipped');
     }
-
+    
     console.log('Donate system initialized successfully');
   } catch (error) {
     console.error('Error initializing donate system:', error);
@@ -2529,7 +2598,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`CORS Enabled with security restrictions`);
 
   console.log(`Stream schedule reset task started (every Monday 00:00 Vietnam time)`);
-
+  
   // Initialize donate system after server starts
   initializeDonateSystem();
 });
